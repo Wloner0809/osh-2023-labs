@@ -1,32 +1,32 @@
 # Lab1
 
-### Linux内核裁剪过程 
+## Linux内核裁剪过程 
 
-* first `12.4MB`
+* first version `12.4MB`
 ***
-* second `10.1MB`
+* second version `10.1MB`
   * delete `Kernel hacking` 
 ***
-* third `7.2MB`
+* third verison `7.2MB`
   * delete `Networking support`
 ***
-* fourth `6.4MB`
+* fourth verison `6.4MB`
   * change `General setup_Compiler optimization level (Optimize for size (-Os))`
 ***
-* fifth `6.1MB`
+* fifth version `6.1MB`
   * delete `Security options`
   * delete `Library routines`
   * delete `Cryptographic API`
   * delete `Device Drivers_USB support`
 ***
-* sixth `5.0MB`
+* sixth version `5.0MB`
   * change `General setup_Kernel compression mode (LZMA)`
 ***
-* seventh `4.8MB`
+* seventh version `4.8MB`
   * delete `File systems_Quota support`
   * delete `File systems_The Extended 4 (ext4) filesystem`
 ***
-* eighth `4.5MB`
+* eighth version `4.5MB`
   * delete `General setup_Control Group support`
   * delete `Processor type and features_Enable 5-level page tables support`
   * delete `General setup_Compile the kernel with warnings as errors`
@@ -41,7 +41,7 @@
   * delete `General architecture-dependent options_Provide system calls for 32-bit time_t`
   * delete `Processor type and features_EFI runtime service support`
 ***
-* ninth `3.8MB`
+* ninth version `3.8MB`
   * delete `Processor type and features_Symmetric multi-processing support`
   * delete `Processor type and features_Single-depth WCHAN output`
   * delete `Processor type and features_Linux guest support`
@@ -61,11 +61,22 @@
   * delete `Device Drivers_Multiple devices driver support (RAID and LVM)`
 
 
-> 实际上上面是我第二次裁剪Linux内核的过程，第一次由于没有考虑到对后续实验的影响，为了裁剪去掉了很多可能有影响的选项。
+> 实际上上面是我第二次裁剪Linux内核的过程。
+> 第一次由于没有考虑到对后续实验的影响，为了裁剪内核(使得内核大小尽量小)去掉了很多可能有影响的选项。
 
 * 对`Linux`内核大小/编译时间有影响的选项
   * `Kernel hacking` 
   * `Networking support`
   * `General setup_Compiler optimization level (Optimize for size (-Os))`
   * `General setup_Kernel compression mode (LZMA)`
+
+* 通过`make menuconfig`命令来设置参数
+  * `General setup_Kernel compression mode`共有6种模式，通过`<help>`可以查询到`LZMA`对应的`kernel`大小最小。
+  * `General setup_Compiler optimization level`共有2个选择，`Optimize for size (-Os)`是为了优化大小的。
+  * `Kernel hacking`和`Networking support`可以通过上面的裁剪过程看出，删除之后Linux内核的大小明显缩小。
+  
+ 
+## 自定义Syscall测试
+
+![](/pics/syscall_test.png) 
 
