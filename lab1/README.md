@@ -78,5 +78,5 @@
  
 ## 自定义Syscall测试
 
-![](/pics/syscall_test.png) 
+![](pics/syscall_test.png) 
 
