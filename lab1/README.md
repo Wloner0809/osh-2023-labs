@@ -75,6 +75,11 @@
   * `General setup_Compiler optimization level`共有2个选择，`Optimize for size (-Os)`是为了优化大小的。
   * `Kernel hacking`和`Networking support`可以通过上面的裁剪过程看出，删除之后Linux内核的大小明显缩小。
   
+  
+## kernel panic
+
+* 通过将`init.c`中的`while(1){}`删除换成`return 0;`可以造成`kernel panic`
+> 原因是`init`将会作为第一个用户态进程被启动，成为所有后续进程的父进程。如果`init`返回了那么就会导致后续进程没有父进程，进而导致`kernel panic`
  
 ## 自定义Syscall测试
 
