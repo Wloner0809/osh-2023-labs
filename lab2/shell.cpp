@@ -69,8 +69,14 @@ int main() {
     }
 
     if (args[0] == "cd") {
-      std::cout << "To be done!\n";
-      continue;
+        if(args.size() == 1)
+            chdir("/home");
+        else 
+            chdir(args[1].c_str());
+        char path_pwd[MAXLEN_PATH];
+        getcwd(path_pwd, sizeof(path_pwd));
+        std::cout << path_pwd << std::endl;
+        continue;
     }
 
     // 处理外部命令
