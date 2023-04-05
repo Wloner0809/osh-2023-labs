@@ -15,7 +15,6 @@
 
 
 
-#define MAXLEN_PATH 1000
 
 
 std::vector<std::string> split(std::string s, const std::string &delimiter);
@@ -62,21 +61,23 @@ int main() {
     }
 
     if (args[0] == "pwd") {
-        char path[MAXLEN_PATH];
-        getcwd(path,sizeof(path));
-        std::cout << path << std::endl;
-        continue;
+      std::string path;
+      path.resize(PATH_MAX);
+      getcwd(& path[0], path.size());
+      std::cout << path << std::endl;
+      continue;
     }
 
     if (args[0] == "cd") {
-        if(args.size() == 1)
-            chdir("/home");
-        else 
-            chdir(args[1].c_str());
-        char path_pwd[MAXLEN_PATH];
-        getcwd(path_pwd, sizeof(path_pwd));
-        std::cout << path_pwd << std::endl;
-        continue;
+      if(args.size() == 1)
+          chdir("/home");
+      else 
+          chdir(args[1].c_str());
+      std::string path;
+      path.resize(PATH_MAX);
+      getcwd(& path[0], path.size());
+      std::cout << path << std::endl;
+      continue;
     }
 
     // 处理外部命令
