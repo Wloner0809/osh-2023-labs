@@ -21,6 +21,7 @@
 
 void run_cmd(std::vector<std::string>);
 void run_redi_cmd(std::vector<std::string>);
+void run_pipe_cmd(std::vector<std::string>);
 
 std::vector<std::string> split(std::string s, const std::string &delimiter);
 
@@ -111,7 +112,7 @@ int main()
       // execvp 会完全更换子进程接下来的代码，所以正常情况下 execvp 之后这里的代码就没意义了
       // 如果 execvp 之后的代码被运行了，那就是 execvp 出问题了
       // execvp(args[0].c_str(), arg_ptrs);
-      run_redi_cmd(args);
+      run_pipe_cmd(args);
       // 所以这里直接报错
       exit(255);
     }
@@ -212,15 +213,84 @@ void run_redi_cmd(std::vector<std::string> args)
     }
     else
     {
-      index ++;
+      index++;
     }
   }
   index = 0;
-  while((__SIZE_TYPE__)index < args.size())
-    index ++;
-  if(index == 0)
-    //there is no redirection cmd
+  int count = 0;
+  while ((__SIZE_TYPE__)index < args.size())
+  {
+    if (args[index] == ">" || args[index] == ">>" || args[index] == "<")
+    {
+      count++;
+    }
+    index++;
+  }
+  if (count == 0)
+    // there is no redirection cmd
     run_cmd(args);
 
-  return ;
+  return;
+}
+
+void run_pipe_cmd(std::vector<std::string> args)
+{
+  //there are some bugs here.
+  //debug tomorrow(now is 4.7 22:30)
+  int index = 0;
+  std::vector<std::string> cmd;
+  std::vector<std::string> cmd_pipe_right;
+  while ((__SIZE_TYPE__)index < args.size())
+  {
+    cmd.push_back(args[index]);
+    if (args[index] == "|")
+    {
+      cmd.pop_back();
+      int fd[2];
+      pipe(fd);
+      pid_t pid1 = fork();
+      if (pid1 == 0)
+      {
+        close(fd[0]);
+        dup2(fd[1], 1);
+        run_redi_cmd(cmd);
+        cmd.clear();
+        close(fd[1]);
+      }
+      for (__SIZE_TYPE__ i = index + 1; i < args.size(); i++)
+      {
+        cmd_pipe_right.push_back(args[i]);
+      }
+      pid_t pid2 = fork();
+      if (pid2 == 0)
+      {
+        close(fd[1]);
+        dup2(fd[0], 0);
+        run_pipe_cmd(cmd_pipe_right);
+        close(fd[0]);
+      }
+      close(fd[0]);
+      close(fd[1]);
+      waitpid(pid1, NULL, 0);
+      waitpid(pid2, NULL, 0);
+      //break; is very necessary there.
+      //or the recursion is wrong.
+      break;
+    }
+    index++;
+  }
+  index = 0;
+  int count = 0;
+  while ((__SIZE_TYPE__)index < args.size())
+  {
+    if (args[index] == "|")
+    {
+      count++;
+    }
+    index++;
+  }
+  if (count == 0)
+    // there is no pipe
+    run_redi_cmd(args);
+  return;
 }
