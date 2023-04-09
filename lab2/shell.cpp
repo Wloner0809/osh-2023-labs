@@ -165,6 +165,8 @@ void run_redi_cmd(std::vector<std::string> args)
   std::vector<std::string> cmd;
   while ((__SIZE_TYPE__)index < args.size())
   {
+    //encounter some problems here
+    //"cat < t1.txt > t2.txt" is different from zsh.
     cmd.push_back(args[index]);
     if (args[index] == ">")
     {
@@ -172,14 +174,13 @@ void run_redi_cmd(std::vector<std::string> args)
       pid_t pid = fork();
       if (pid == 0)
       {
-        int fd = open(args[index + 1].c_str(), O_WRONLY | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
+        int fd = open(args[index + 1].c_str(), O_WRONLY | O_TRUNC | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
         dup2(fd, 1);
         run_cmd(cmd);
         cmd.clear();
         close(fd);
       }
       waitpid(pid, NULL, 0);
-      index = index + 2;
     }
     else if (args[index] == ">>")
     {
@@ -187,14 +188,13 @@ void run_redi_cmd(std::vector<std::string> args)
       pid_t pid = fork();
       if (pid == 0)
       {
-        int fd = open(args[index + 1].c_str(), O_APPEND | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
+        int fd = open(args[index + 1].c_str(), O_APPEND | O_RDWR | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
         dup2(fd, 1);
         run_cmd(cmd);
         cmd.clear();
         close(fd);
       }
       waitpid(pid, NULL, 0);
-      index = index + 2;
     }
     else if (args[index] == "<")
     {
@@ -209,12 +209,8 @@ void run_redi_cmd(std::vector<std::string> args)
         close(fd);
       }
       waitpid(pid, NULL, 0);
-      index = index + 2;
     }
-    else
-    {
-      index++;
-    }
+    index++;
   }
   index = 0;
   int count = 0;
@@ -235,8 +231,6 @@ void run_redi_cmd(std::vector<std::string> args)
 
 void run_pipe_cmd(std::vector<std::string> args)
 {
-  //there are some bugs here.
-  //debug tomorrow(now is 4.7 22:30)
   int index = 0;
   std::vector<std::string> cmd;
   std::vector<std::string> cmd_pipe_right;
