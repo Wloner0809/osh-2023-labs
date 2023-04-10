@@ -19,9 +19,12 @@
 
 #include <fcntl.h>
 
+#include <signal.h>
+
 void run_cmd(std::vector<std::string>);
 void run_redi_cmd(std::vector<std::string>);
 void run_pipe_cmd(std::vector<std::string>);
+void sighandler(int);
 
 std::vector<std::string> split(std::string s, const std::string &delimiter);
 
@@ -29,6 +32,8 @@ int main()
 {
   // 不同步 iostream 和 cstdio 的 buffer
   std::ios::sync_with_stdio(false);
+
+  signal(SIGINT, sighandler);
 
   // 用来存储读入的一行命令
   std::string cmd;
@@ -165,7 +170,7 @@ void run_redi_cmd(std::vector<std::string> args)
   std::vector<std::string> cmd;
   while ((__SIZE_TYPE__)index < args.size())
   {
-    //encounter some problems here
+    // encounter some problems here
     //"cat < t1.txt > t2.txt" is different from zsh.
     cmd.push_back(args[index]);
     if (args[index] == ">")
@@ -267,8 +272,8 @@ void run_pipe_cmd(std::vector<std::string> args)
       close(fd[1]);
       waitpid(pid1, NULL, 0);
       waitpid(pid2, NULL, 0);
-      //break; is very necessary there.
-      //or the recursion is wrong.
+      // break; is very necessary there.
+      // or the recursion is wrong.
       break;
     }
     index++;
@@ -287,4 +292,9 @@ void run_pipe_cmd(std::vector<std::string> args)
     // there is no pipe
     run_redi_cmd(args);
   return;
+}
+
+void sighandler(int)
+{
+  std::cout << std::endl;
 }
