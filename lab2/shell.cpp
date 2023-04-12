@@ -26,6 +26,9 @@ void run_redi_cmd(std::vector<std::string>);
 void run_pipe_cmd(std::vector<std::string>);
 void sighandler(int);
 
+// a sign for background cmd
+bool is_background_cmd;
+
 std::vector<std::string> split(std::string s, const std::string &delimiter);
 
 int main()
@@ -47,6 +50,15 @@ int main()
 
     // 按空格分割命令为单词
     std::vector<std::string> args = split(cmd, " ");
+
+    //cmd is background or not
+    if (args[args.size() - 1] == "&")
+    {
+      is_background_cmd = true;
+      args.pop_back();
+    }
+    else
+      is_background_cmd = false;
 
     // 没有可处理的命令
     if (args.empty())
@@ -123,11 +135,16 @@ int main()
     }
 
     // 这里只有父进程（原进程）才会进入
-    int ret = wait(nullptr);
-    if (ret < 0)
-    {
-      std::cout << "wait failed";
-    }
+    if(is_background_cmd)
+      //WNOHANG option
+      waitpid(pid, NULL, WNOHANG);
+    else  
+      wait(nullptr);
+    // int ret = wait(nullptr);
+    // if (ret < 0)
+    // {
+    //   std::cout << "wait failed";
+    // }
   }
 }
 
@@ -294,7 +311,8 @@ void run_pipe_cmd(std::vector<std::string> args)
   return;
 }
 
-void sighandler(int)
+void sighandler(int sig)
 {
   std::cout << std::endl;
+  return;
 }
