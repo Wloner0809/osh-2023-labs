@@ -21,10 +21,15 @@
 
 #include <signal.h>
 
+#include <setjmp.h>
+
 void run_cmd(std::vector<std::string>);
 void run_redi_cmd(std::vector<std::string>);
 void run_pipe_cmd(std::string);
 void sighandler(int);
+
+
+sigjmp_buf env;
 
 // a sign for background cmd
 bool is_background_cmd;
@@ -45,9 +50,12 @@ int main()
   std::string cmd;
   while (true)
   {
+
+    while (sigsetjmp(env, 1) != 0)
+      ;
+    
     // 打印提示符
     std::cout << "# ";
-    fflush(stdout);
     // 读入一行。std::getline 结果不包含换行符。
     std::getline(std::cin, cmd);
 
@@ -145,16 +153,37 @@ int main()
       bg_pid.push_back(pid);
     }
 
+
+
+    // bool sign = true;
+    // pid_t father_pid = 0;
+
+
     if (pid == 0)
     {
       // 这里只有子进程才会进入
       // execvp 会完全更换子进程接下来的代码，所以正常情况下 execvp 之后这里的代码就没意义了
       // 如果 execvp 之后的代码被运行了，那就是 execvp 出问题了
       // execvp(args[0].c_str(), arg_ptrs);
+      // if(sign)
+      //   father_pid = getpid();
+      // setpgid(0, father_pid);
       run_pipe_cmd(cmd);
       // 所以这里直接报错
       exit(255);
     }
+
+
+    // if(sign)
+    //   father_pid = pid;
+    // setpgid(pid, father_pid);
+
+    // if(sign)
+    // {
+    //   tcsetpgrp(STDIN_FILENO, father_pid);
+    //   kill(pid, SIGCONT);
+    //   sign = false;
+    // }
 
     // 这里只有父进程（原进程）才会进入
     if (is_background_cmd)
@@ -164,6 +193,8 @@ int main()
     }
     else
       wait(nullptr);
+
+
     // int ret = wait(nullptr);
     // if (ret < 0)
     // {
@@ -327,7 +358,7 @@ void run_pipe_cmd(std::string cmd)
       if (pid == 0)
       {
         dup2(read_end, 0);
-        if(i < pipe_args.size() - 1)
+        if (i < pipe_args.size() - 1)
         {
           dup2(fd[1], 1);
         }
@@ -348,11 +379,10 @@ void run_pipe_cmd(std::string cmd)
 
 void sighandler(int sig)
 {
-  if(sig == SIGINT)
+  if (sig == SIGINT)
   {
     std::cout << "\n";
-    return ;
+    // https://stackoverflow.com/questions/16828378/readline-get-a-new-prompt-on-sigint
+    siglongjmp(env, 1);
   }
-  signal(sig, SIG_DFL);
-  raise(sig);
 }
