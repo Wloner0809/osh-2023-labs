@@ -23,7 +23,7 @@
 
 void run_cmd(std::vector<std::string>);
 void run_redi_cmd(std::vector<std::string>);
-void run_pipe_cmd(std::vector<std::string>);
+void run_pipe_cmd(std::string);
 void sighandler(int);
 
 // a sign for background cmd
@@ -47,7 +47,7 @@ int main()
   {
     // 打印提示符
     std::cout << "# ";
-
+    fflush(stdout);
     // 读入一行。std::getline 结果不包含换行符。
     std::getline(std::cin, cmd);
 
@@ -116,7 +116,7 @@ int main()
 
     if (args[0] == "wait")
     {
-      //wait cmd version1
+      // wait cmd version1
       for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
       {
         waitpid(bg_pid[i], NULL, 0);
@@ -151,8 +151,7 @@ int main()
       // execvp 会完全更换子进程接下来的代码，所以正常情况下 execvp 之后这里的代码就没意义了
       // 如果 execvp 之后的代码被运行了，那就是 execvp 出问题了
       // execvp(args[0].c_str(), arg_ptrs);
-
-      run_pipe_cmd(args);
+      run_pipe_cmd(cmd);
       // 所以这里直接报错
       exit(255);
     }
@@ -276,68 +275,84 @@ void run_redi_cmd(std::vector<std::string> args)
   return;
 }
 
-void run_pipe_cmd(std::vector<std::string> args)
+void run_pipe_cmd(std::string cmd)
 {
-  int index = 0;
-  std::vector<std::string> cmd;
-  std::vector<std::string> cmd_pipe_right;
-  while ((__SIZE_TYPE__)index < args.size())
+  // split the cmd with " | ", pay attention to space
+  std::vector<std::string> pipe_args = split(cmd, " | ");
+
+  if (pipe_args.size() == 1)
   {
-    cmd.push_back(args[index]);
-    if (args[index] == "|")
-    {
-      cmd.pop_back();
-      int fd[2];
-      pipe(fd);
-      pid_t pid1 = fork();
-      if (pid1 == 0)
-      {
-        close(fd[0]);
-        dup2(fd[1], 1);
-        run_redi_cmd(cmd);
-        cmd.clear();
-        close(fd[1]);
-      }
-      for (__SIZE_TYPE__ i = index + 1; i < args.size(); i++)
-      {
-        cmd_pipe_right.push_back(args[i]);
-      }
-      pid_t pid2 = fork();
-      if (pid2 == 0)
-      {
-        close(fd[1]);
-        dup2(fd[0], 0);
-        run_pipe_cmd(cmd_pipe_right);
-        close(fd[0]);
-      }
-      close(fd[0]);
-      close(fd[1]);
-      waitpid(pid1, NULL, 0);
-      waitpid(pid2, NULL, 0);
-      // break; is very necessary there.
-      // or the recursion is wrong.
-      break;
-    }
-    index++;
-  }
-  index = 0;
-  int count = 0;
-  while ((__SIZE_TYPE__)index < args.size())
-  {
-    if (args[index] == "|")
-    {
-      count++;
-    }
-    index++;
-  }
-  if (count == 0)
-    // there is no pipe
+    std::vector<std::string> args = split(cmd, " ");
     run_redi_cmd(args);
-  return;
+  }
+  else if (pipe_args.size() == 2)
+  {
+    std::vector<std::string> args_left = split(pipe_args[0], " ");
+    std::vector<std::string> args_right = split(pipe_args[1], " ");
+    int fd[2];
+    pipe(fd);
+    pid_t pid1 = fork();
+    if (pid1 == 0)
+    {
+      close(fd[0]);
+      dup2(fd[1], 1);
+      run_redi_cmd(args_left);
+      close(fd[1]);
+    }
+    // father process
+    pid_t pid2 = fork();
+    if (pid2 == 0)
+    {
+      close(fd[1]);
+      dup2(fd[0], 0);
+      run_redi_cmd(args_right);
+      close(fd[0]);
+    }
+    close(fd[0]);
+    close(fd[1]);
+    wait(NULL);
+  }
+  else
+  {
+    int read_end = 0;
+    for (__SIZE_TYPE__ i = 0; i < pipe_args.size(); i++)
+    {
+      int fd[2];
+      if (i < pipe_args.size() - 1)
+      {
+        // the number of "|" is pipe_args.size() - 1
+        pipe(fd);
+      }
+      pid_t pid = fork();
+      if (pid == 0)
+      {
+        dup2(read_end, 0);
+        if(i < pipe_args.size() - 1)
+        {
+          dup2(fd[1], 1);
+        }
+        std::vector<std::string> args = split(pipe_args[i], " ");
+        run_redi_cmd(args);
+      }
+      else
+      {
+        close(fd[1]);
+        if (i > 0)
+          close(read_end);
+        read_end = fd[0];
+      }
+    }
+    wait(NULL);
+  }
 }
 
 void sighandler(int sig)
 {
-  std::cout << std::endl;
-  return;
+  if(sig == SIGINT)
+  {
+    std::cout << "\n";
+    return ;
+  }
+  signal(sig, SIG_DFL);
+  raise(sig);
 }
