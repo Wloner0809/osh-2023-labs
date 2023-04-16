@@ -28,7 +28,7 @@ void run_redi_cmd(std::vector<std::string>);
 void run_pipe_cmd(std::string);
 void sighandler(int);
 
-
+//used in handling ctrl c
 sigjmp_buf env;
 
 // a sign for background cmd
@@ -53,7 +53,7 @@ int main()
 
     while (sigsetjmp(env, 1) != 0)
       ;
-    
+
     // 打印提示符
     std::cout << "# ";
     // 读入一行。std::getline 结果不包含换行符。
@@ -139,51 +139,38 @@ int main()
     // 处理外部命令
     pid_t pid = fork();
 
-    // // std::vector<std::string> 转 char **
-    // char *arg_ptrs[args.size() + 1];
-    // for (auto i = 0; i < args.size(); i++)
-    // {
-    //   arg_ptrs[i] = &args[i][0];
-    // }
-    // // exec p 系列的 argv 需要以 nullptr 结尾
-    // arg_ptrs[args.size()] = nullptr;
-
+    // bg_pid is used in wait cmd
     if (is_background_cmd)
     {
       bg_pid.push_back(pid);
     }
 
-
-
-    // bool sign = true;
-    // pid_t father_pid = 0;
-
+    bool sign = true;
+    pid_t father_pid = 0;
 
     if (pid == 0)
     {
       // 这里只有子进程才会进入
-      // execvp 会完全更换子进程接下来的代码，所以正常情况下 execvp 之后这里的代码就没意义了
-      // 如果 execvp 之后的代码被运行了，那就是 execvp 出问题了
-      // execvp(args[0].c_str(), arg_ptrs);
-      // if(sign)
-      //   father_pid = getpid();
-      // setpgid(0, father_pid);
+
+      if (sign)
+        father_pid = getpid();
+      setpgid(0, father_pid);
+
       run_pipe_cmd(cmd);
       // 所以这里直接报错
       exit(255);
     }
 
+    if (sign)
+      father_pid = pid;
+    setpgid(pid, father_pid);
 
-    // if(sign)
-    //   father_pid = pid;
-    // setpgid(pid, father_pid);
-
-    // if(sign)
-    // {
-    //   tcsetpgrp(STDIN_FILENO, father_pid);
-    //   kill(pid, SIGCONT);
-    //   sign = false;
-    // }
+    if (sign)
+    {
+      tcsetpgrp(STDIN_FILENO, father_pid);
+      kill(pid, SIGCONT);
+      sign = false;
+    }
 
     // 这里只有父进程（原进程）才会进入
     if (is_background_cmd)
@@ -194,12 +181,9 @@ int main()
     else
       wait(nullptr);
 
-
-    // int ret = wait(nullptr);
-    // if (ret < 0)
-    // {
-    //   std::cout << "wait failed";
-    // }
+    signal(SIGTTOU, SIG_IGN);
+    tcsetpgrp(STDIN_FILENO, getpgid(getpid()));
+    signal(SIGTTOU, SIG_DFL);
   }
 }
 
@@ -308,18 +292,31 @@ void run_redi_cmd(std::vector<std::string> args)
 
 void run_pipe_cmd(std::string cmd)
 {
-  // split the cmd with " | ", pay attention to space
+  // split the cmd with " | ", pay attention to space.
+  // In fact, I just let "|" have one space before "|" and after "|"
   std::vector<std::string> pipe_args = split(cmd, " | ");
+
+  // note that cmd may have "&"
+  // so I need to judge if there is "&"
+  // if it does, I will pop it
 
   if (pipe_args.size() == 1)
   {
+    // there is no "|"
     std::vector<std::string> args = split(cmd, " ");
+    if (args[args.size() - 1] == "&")
+      args.pop_back();
     run_redi_cmd(args);
   }
   else if (pipe_args.size() == 2)
   {
+    // single "|"
     std::vector<std::string> args_left = split(pipe_args[0], " ");
+    if (args_left[args_left.size() - 1] == "&")
+      args_left.pop_back();
     std::vector<std::string> args_right = split(pipe_args[1], " ");
+    if (args_right[args_right.size() - 1] == "&")
+      args_right.pop_back();
     int fd[2];
     pipe(fd);
     pid_t pid1 = fork();
@@ -349,9 +346,9 @@ void run_pipe_cmd(std::string cmd)
     for (__SIZE_TYPE__ i = 0; i < pipe_args.size(); i++)
     {
       int fd[2];
+      // the number of "|" is pipe_args.size() - 1
       if (i < pipe_args.size() - 1)
       {
-        // the number of "|" is pipe_args.size() - 1
         pipe(fd);
       }
       pid_t pid = fork();
@@ -363,6 +360,8 @@ void run_pipe_cmd(std::string cmd)
           dup2(fd[1], 1);
         }
         std::vector<std::string> args = split(pipe_args[i], " ");
+        if (args[args.size() - 1] == "&")
+          args.pop_back();
         run_redi_cmd(args);
       }
       else
@@ -381,7 +380,7 @@ void sighandler(int sig)
 {
   if (sig == SIGINT)
   {
-    std::cout << "\n";
+    std::cout << std::endl;
     // https://stackoverflow.com/questions/16828378/readline-get-a-new-prompt-on-sigint
     siglongjmp(env, 1);
   }
