@@ -146,10 +146,16 @@ int main()
 
     if (args[0] == "echo")
     {
-      //support echo $SHELL cmd
+      // support echo $SHELL cmd
       if (args[1] == "$SHELL")
       {
         std::cout << getenv("SHELL") << "\n";
+        continue;
+      }
+      // support echo ~root cmd
+      else if (args[1] == "~root")
+      {
+        std::cout << "/root\n";
         continue;
       }
     }
