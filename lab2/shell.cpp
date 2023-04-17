@@ -28,7 +28,7 @@ void run_redi_cmd(std::vector<std::string>);
 void run_pipe_cmd(std::string);
 void sighandler(int);
 
-//used in handling ctrl c
+// used in handling ctrl c
 sigjmp_buf env;
 
 // a sign for background cmd
@@ -51,11 +51,21 @@ int main()
   while (true)
   {
 
+    // 返回值：若直接调用则返回0，若从siglongjmp()调用返回则返回非0值
     while (sigsetjmp(env, 1) != 0)
       ;
 
     // 打印提示符
     std::cout << "# ";
+
+
+    //handle ctrl d
+    //sth. about peek() function:
+    //cin.peek()的返回值是一个char型的字符，其返回值是指针指向的当前字符，但它只是观测
+    //指针停留在当前位置并不后移；如果要访问的字符是文件结束符，则函数值是EOF(-1)
+    if(std::cin.peek() == EOF)
+      exit(0);
+
     // 读入一行。std::getline 结果不包含换行符。
     std::getline(std::cin, cmd);
 
@@ -146,33 +156,47 @@ int main()
     }
 
     bool sign = true;
-    pid_t father_pid = 0;
+    pid_t pgid = 0;
 
     if (pid == 0)
     {
       // 这里只有子进程才会进入
+      // std::cout << "child process\n";
 
       if (sign)
-        father_pid = getpid();
-      setpgid(0, father_pid);
+        pgid = getpid();
+      setpgid(pid, pgid);
+
+      // std::cout << pgid << "\n";
+      // std::cout << getpgid(pid) << "\n";
+      // std::cout << getpgid(pgid) << "\n";
 
       run_pipe_cmd(cmd);
       // 所以这里直接报错
       exit(255);
     }
 
+    // 这里只有父进程（原进程）才会进入
+    // std::cout << "father process\n";
+
     if (sign)
-      father_pid = pid;
-    setpgid(pid, father_pid);
+      pgid = pid;
+    setpgid(pid, pgid);
+
+    // std::cout << getpgid(pid) << "\n";
+    // std::cout << getpid() << "\n";
+    // std::cout << getppid() << "\n";
+    // std::cout << getpgid(getppid()) << "\n";
 
     if (sign)
     {
-      tcsetpgrp(STDIN_FILENO, father_pid);
+      tcsetpgrp(STDIN_FILENO, pgid);
       kill(pid, SIGCONT);
       sign = false;
     }
 
-    // 这里只有父进程（原进程）才会进入
+    // std::cout << getpgid(pid) << "\n";
+
     if (is_background_cmd)
     {
       // WNOHANG option
@@ -181,6 +205,7 @@ int main()
     else
       wait(nullptr);
 
+    // recover the old foreground process
     signal(SIGTTOU, SIG_IGN);
     tcsetpgrp(STDIN_FILENO, getpgid(getpid()));
     signal(SIGTTOU, SIG_DFL);
