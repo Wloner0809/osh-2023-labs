@@ -58,12 +58,11 @@ int main()
     // 打印提示符
     std::cout << "# ";
 
-
-    //handle ctrl d
-    //sth. about peek() function:
-    //cin.peek()的返回值是一个char型的字符，其返回值是指针指向的当前字符，但它只是观测
-    //指针停留在当前位置并不后移；如果要访问的字符是文件结束符，则函数值是EOF(-1)
-    if(std::cin.peek() == EOF)
+    // handle ctrl d
+    // sth. about peek() function:
+    // cin.peek()的返回值是一个char型的字符，其返回值是指针指向的当前字符，但它只是观测
+    // 指针停留在当前位置并不后移；如果要访问的字符是文件结束符，则函数值是EOF(-1)
+    if (std::cin.peek() == EOF)
       exit(0);
 
     // 读入一行。std::getline 结果不包含换行符。
@@ -122,7 +121,7 @@ int main()
     if (args[0] == "cd")
     {
       if (args.size() <= 1)
-        chdir("/home");
+        chdir(getenv("HOME"));
       else
         chdir(args[1].c_str());
       std::string path;
@@ -134,7 +133,6 @@ int main()
 
     if (args[0] == "wait")
     {
-      // wait cmd version1
       for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
       {
         waitpid(bg_pid[i], NULL, 0);
@@ -144,6 +142,16 @@ int main()
         bg_pid.pop_back();
       }
       continue;
+    }
+
+    if (args[0] == "echo")
+    {
+      //support echo $SHELL cmd
+      if (args[1] == "$SHELL")
+      {
+        std::cout << getenv("SHELL") << "\n";
+        continue;
+      }
     }
 
     // 处理外部命令
