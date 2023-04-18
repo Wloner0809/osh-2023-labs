@@ -23,6 +23,8 @@
 
 #include <setjmp.h>
 
+#include <algorithm>
+
 void run_cmd(std::vector<std::string>);
 void run_redi_cmd(std::vector<std::string>);
 void run_pipe_cmd(std::string);
@@ -136,6 +138,7 @@ int main()
       for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
       {
         waitpid(bg_pid[i], NULL, 0);
+        std::cout << bg_pid[i] << " finish\n";
       }
       for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
       {
@@ -260,73 +263,40 @@ void run_cmd(std::vector<std::string> args)
 
 void run_redi_cmd(std::vector<std::string> args)
 {
-  // run redirection command
-  int index = 0;
-  std::vector<std::string> cmd;
-  while ((__SIZE_TYPE__)index < args.size())
+  std::vector<std::string>::iterator index;
+  while (find(args.begin(), args.end(), ">") != args.end() || find(args.begin(), args.end(), ">>") != args.end() || find(args.begin(), args.end(), "<") != args.end())
   {
-    // encounter some problems here
-    //"cat < t1.txt > t2.txt" is different from zsh.
-    cmd.push_back(args[index]);
-    if (args[index] == ">")
+    if (find(args.begin(), args.end(), ">") != args.end())
     {
-      cmd.pop_back();
-      pid_t pid = fork();
-      if (pid == 0)
-      {
-        int fd = open(args[index + 1].c_str(), O_WRONLY | O_TRUNC | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
-        dup2(fd, 1);
-        run_cmd(cmd);
-        cmd.clear();
-        close(fd);
-      }
-      waitpid(pid, NULL, 0);
+      index = find(args.begin(), args.end(), ">");
+      int fd = open((*(index + 1)).c_str(), O_WRONLY | O_TRUNC | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
+      dup2(fd, 1);
+      close(fd);
+      *index = "%";
+      *(index + 1) = "%";
     }
-    else if (args[index] == ">>")
+    else if (find(args.begin(), args.end(), ">>") != args.end())
     {
-      cmd.pop_back();
-      pid_t pid = fork();
-      if (pid == 0)
-      {
-        int fd = open(args[index + 1].c_str(), O_APPEND | O_RDWR | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
-        dup2(fd, 1);
-        run_cmd(cmd);
-        cmd.clear();
-        close(fd);
-      }
-      waitpid(pid, NULL, 0);
+      index = find(args.begin(), args.end(), ">>");
+      int fd = open((*(index + 1)).c_str(), O_APPEND | O_RDWR | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
+      dup2(fd, 1);
+      close(fd);
+      *index = "%";
+      *(index + 1) = "%";
     }
-    else if (args[index] == "<")
+    else if (find(args.begin(), args.end(), "<") != args.end())
     {
-      cmd.pop_back();
-      pid_t pid = fork();
-      if (pid == 0)
-      {
-        int fd = open(args[index + 1].c_str(), O_RDONLY);
-        dup2(fd, 0);
-        run_cmd(cmd);
-        cmd.clear();
-        close(fd);
-      }
-      waitpid(pid, NULL, 0);
+      index = find(args.begin(), args.end(), "<");
+      int fd = open((*(index + 1)).c_str(), O_RDONLY);
+      dup2(fd, 0);
+      close(fd);
+      *index = "%";
+      *(index + 1) = "%";
     }
-    index++;
   }
-  index = 0;
-  int count = 0;
-  while ((__SIZE_TYPE__)index < args.size())
-  {
-    if (args[index] == ">" || args[index] == ">>" || args[index] == "<")
-    {
-      count++;
-    }
-    index++;
-  }
-  if (count == 0)
-    // there is no redirection cmd
-    run_cmd(args);
-
-  return;
+  args.erase(remove(args.begin(), args.end(), "%"), args.end());
+  run_cmd(args);
+  return ;
 }
 
 void run_pipe_cmd(std::string cmd)
@@ -347,40 +317,9 @@ void run_pipe_cmd(std::string cmd)
       args.pop_back();
     run_redi_cmd(args);
   }
-  else if (pipe_args.size() == 2)
-  {
-    // single "|"
-    std::vector<std::string> args_left = split(pipe_args[0], " ");
-    if (args_left[args_left.size() - 1] == "&")
-      args_left.pop_back();
-    std::vector<std::string> args_right = split(pipe_args[1], " ");
-    if (args_right[args_right.size() - 1] == "&")
-      args_right.pop_back();
-    int fd[2];
-    pipe(fd);
-    pid_t pid1 = fork();
-    if (pid1 == 0)
-    {
-      close(fd[0]);
-      dup2(fd[1], 1);
-      run_redi_cmd(args_left);
-      close(fd[1]);
-    }
-    // father process
-    pid_t pid2 = fork();
-    if (pid2 == 0)
-    {
-      close(fd[1]);
-      dup2(fd[0], 0);
-      run_redi_cmd(args_right);
-      close(fd[0]);
-    }
-    close(fd[0]);
-    close(fd[1]);
-    wait(NULL);
-  }
   else
   {
+    // let read_end's default value = STDIN_FILENO
     int read_end = 0;
     for (__SIZE_TYPE__ i = 0; i < pipe_args.size(); i++)
     {
@@ -408,6 +347,7 @@ void run_pipe_cmd(std::string cmd)
         close(fd[1]);
         if (i > 0)
           close(read_end);
+        if (i < pipe_args.size() - 1) 
         read_end = fd[0];
       }
     }
