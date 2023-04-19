@@ -58,6 +58,11 @@ int main()
 
     history_cmd.push_back(cmd);
 
+    if (alias_cmd.find(cmd) != alias_cmd.end())
+    {
+      cmd = alias_cmd[cmd];
+    }
+
     // 按空格分割命令为单词
     std::vector<std::string> args = split(cmd, " ");
 
@@ -184,6 +189,16 @@ int main()
       {
         std::cout << "  " << i + 1 << "  " << history_cmd[i] << std::endl;
       }
+      continue;
+    }
+
+    // handle alias cmd
+    if (args[0] == "alias")
+    {
+      size_t index = cmd.find("=");
+      alias_cmd[cmd.substr(6, index - 7)] = cmd.substr(index + 2);
+      // std::cout << cmd.substr(6, index - 7) << std::endl;
+      // std::cout << cmd.substr(index + 2) << std::endl;
       continue;
     }
 

@@ -13,6 +13,8 @@ bool is_background_cmd;
 std::vector<pid_t> bg_pid;
 // used in history cmd
 std::vector<std::string> history_cmd;
+// used in alias cmd
+std::unordered_map<std::string, std::string> alias_cmd;
 
 // 经典的 cpp string split 实现
 // https://stackoverflow.com/a/14266139/11691878
