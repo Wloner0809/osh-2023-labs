@@ -11,7 +11,8 @@ sigjmp_buf env;
 bool is_background_cmd;
 // store bg_pid
 std::vector<pid_t> bg_pid;
-
+// used in history cmd
+std::vector<std::string> history_cmd;
 
 // 经典的 cpp string split 实现
 // https://stackoverflow.com/a/14266139/11691878

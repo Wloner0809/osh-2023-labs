@@ -5,6 +5,7 @@
 * 支持`CTRL-D`(5%)
 * `echo $SHELL`(5%)
 * `echo ~root`(5%)
+* 支持`history`(5%)
 
 
 ## Test the function of each part

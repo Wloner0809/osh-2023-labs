@@ -56,8 +56,31 @@ int main()
     // 读入一行。std::getline 结果不包含换行符。
     std::getline(std::cin, cmd);
 
+    history_cmd.push_back(cmd);
+
     // 按空格分割命令为单词
     std::vector<std::string> args = split(cmd, " ");
+
+    if (args[0][0] == '!')
+    {
+      if (args[0][1] == '!')
+      {
+        history_cmd.pop_back();
+        std::cout << history_cmd[history_cmd.size() - 1] << std::endl;
+        cmd = history_cmd[history_cmd.size() - 1];
+        args = split(cmd, " ");
+      }
+      else
+      {
+        history_cmd.pop_back();
+        args[0] = args[0].substr(1);
+        int num = atoi(args[0].c_str());
+        history_cmd.push_back(history_cmd[num - 1]);
+        std::cout << history_cmd[num - 1] << std::endl;
+        cmd = history_cmd[num - 1];
+        args = split(cmd, " ");
+      }
+    }
 
     // cmd is background or not
     if (args[args.size() - 1] == "&")
@@ -96,6 +119,7 @@ int main()
 
       return code;
     }
+
     // pwd and cd are built-in cmd.
     if (args[0] == "pwd")
     {
@@ -146,6 +170,21 @@ int main()
         std::cout << "/root\n";
         continue;
       }
+    }
+
+    // handle history cmd
+    if (args[0] == "history")
+    {
+      // convert the string to int
+      long unsigned num = atoi(args[1].c_str());
+      // if num is larger than history_cmd.size(), output all cmds
+      if (num > history_cmd.size())
+        num = history_cmd.size();
+      for (long unsigned i = history_cmd.size() - num; i <= history_cmd.size() - 1; i++)
+      {
+        std::cout << "  " << i + 1 << "  " << history_cmd[i] << std::endl;
+      }
+      continue;
     }
 
     // 处理外部命令
@@ -202,8 +241,8 @@ int main()
     if (is_background_cmd)
     {
       // WNOHANG option
-      //如果pid指定的子进程没有结束，则waitpid()函数立即返回0，
-      //而不是阻塞在这个函数上等待；如果结束了，则返回该子进程的进程号
+      // 如果pid指定的子进程没有结束，则waitpid()函数立即返回0，
+      // 而不是阻塞在这个函数上等待；如果结束了，则返回该子进程的进程号
       waitpid(pid, NULL, WNOHANG);
     }
     else
