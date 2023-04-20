@@ -128,6 +128,17 @@ int main()
     // pwd and cd are built-in cmd.
     if (args[0] == "pwd")
     {
+      for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
+      {
+        if (waitpid(bg_pid[i], NULL, WNOHANG) != 0)
+        {
+          std::cout << bg_pid[i] << "    "
+                    << "finish!"
+                    << "                   " << bg_cmd[bg_pid[i]] << std::endl;
+          bg_pid.erase(std::find(bg_pid.begin(), bg_pid.end(), bg_pid[i]));
+          bg_cmd.erase(bg_pid[i]);
+        }
+      }
       std::string path;
       path.resize(PATH_MAX);
       getcwd(&path[0], path.size());
@@ -137,6 +148,17 @@ int main()
 
     if (args[0] == "cd")
     {
+      for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
+      {
+        if (waitpid(bg_pid[i], NULL, WNOHANG) != 0)
+        {
+          std::cout << bg_pid[i] << "    "
+                    << "finish!"
+                    << "                   " << bg_cmd[bg_pid[i]] << std::endl;
+          bg_pid.erase(std::find(bg_pid.begin(), bg_pid.end(), bg_pid[i]));
+          bg_cmd.erase(bg_pid[i]);
+        }
+      }
       if (args.size() <= 1)
         chdir(getenv("HOME"));
       else
@@ -148,6 +170,9 @@ int main()
       continue;
     }
 
+    // TO BE DONE
+    // When the process finishes, output its pid and the cmd
+    // first finish first output
     if (args[0] == "wait")
     {
       for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
@@ -156,13 +181,29 @@ int main()
       }
       for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
       {
-        bg_pid.pop_back();
+        std::cout << bg_pid[i] << "    "
+                  << "finish!"
+                  << "                   " << bg_cmd[bg_pid[i]] << std::endl;
+        ;
+        bg_pid.erase(std::find(bg_pid.begin(), bg_pid.end(), bg_pid[i]));
+        bg_cmd.erase(bg_pid[i]);
       }
       continue;
     }
 
     if (args[0] == "echo")
     {
+      for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
+      {
+        if (waitpid(bg_pid[i], NULL, WNOHANG) != 0)
+        {
+          std::cout << bg_pid[i] << "    "
+                    << "finish!"
+                    << "                   " << bg_cmd[bg_pid[i]] << std::endl;
+          bg_pid.erase(std::find(bg_pid.begin(), bg_pid.end(), bg_pid[i]));
+          bg_cmd.erase(bg_pid[i]);
+        }
+      }
       // support echo $SHELL cmd
       if (args[1] == "$SHELL")
       {
@@ -180,6 +221,17 @@ int main()
     // handle history cmd
     if (args[0] == "history")
     {
+      for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
+      {
+        if (waitpid(bg_pid[i], NULL, WNOHANG) != 0)
+        {
+          std::cout << bg_pid[i] << "    "
+                    << "finish!"
+                    << "                   " << bg_cmd[bg_pid[i]] << std::endl;
+          bg_pid.erase(std::find(bg_pid.begin(), bg_pid.end(), bg_pid[i]));
+          bg_cmd.erase(bg_pid[i]);
+        }
+      }
       // convert the string to int
       long unsigned num = atoi(args[1].c_str());
       // if num is larger than history_cmd.size(), output all cmds
@@ -195,6 +247,17 @@ int main()
     // handle alias cmd
     if (args[0] == "alias")
     {
+      for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
+      {
+        if (waitpid(bg_pid[i], NULL, WNOHANG) != 0)
+        {
+          std::cout << bg_pid[i] << "    "
+                    << "finish!"
+                    << "                   " << bg_cmd[bg_pid[i]] << std::endl;
+          bg_pid.erase(std::find(bg_pid.begin(), bg_pid.end(), bg_pid[i]));
+          bg_cmd.erase(bg_pid[i]);
+        }
+      }
       size_t index = cmd.find("=");
       alias_cmd[cmd.substr(6, index - 7)] = cmd.substr(index + 2);
       // std::cout << cmd.substr(6, index - 7) << std::endl;
@@ -204,12 +267,6 @@ int main()
 
     // 处理外部命令
     pid_t pid = fork();
-
-    // bg_pid is used in wait cmd
-    if (is_background_cmd)
-    {
-      bg_pid.push_back(pid);
-    }
 
     bool sign = true;
     pid_t pgid = 0;
@@ -226,7 +283,6 @@ int main()
       // std::cout << pgid << "\n";
       // std::cout << getpgid(pid) << "\n";
       // std::cout << getpgid(pgid) << "\n";
-
       run_pipe_cmd(cmd);
       // 所以这里直接报错
       exit(255);
@@ -234,6 +290,16 @@ int main()
 
     // 这里只有父进程（原进程）才会进入
     // std::cout << "father process\n";
+
+    // bg_pid is used in wait cmd
+    if (is_background_cmd)
+    {
+      bg_pid.push_back(pid);
+      int index = cmd.find("&");
+      std::string single_bg_cmd = cmd.substr(0, index - 1);
+      bg_cmd[pid] = single_bg_cmd;
+      std::cout << pid << "    " << single_bg_cmd << "               will execute in background" << std::endl;
+    }
 
     if (sign)
       pgid = pid;
@@ -246,7 +312,7 @@ int main()
 
     if (sign)
     {
-      tcsetpgrp(STDIN_FILENO, pgid);
+      tcsetpgrp(0, pgid);
       kill(pid, SIGCONT);
       sign = false;
     }
@@ -261,11 +327,24 @@ int main()
       waitpid(pid, NULL, WNOHANG);
     }
     else
+    {
+      for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
+      {
+        if (waitpid(bg_pid[i], NULL, WNOHANG) != 0)
+        {
+          std::cout << bg_pid[i] << "    "
+                    << "finish!"
+                    << "                   " << bg_cmd[bg_pid[i]] << std::endl;
+          bg_pid.erase(std::find(bg_pid.begin(), bg_pid.end(), bg_pid[i]));
+          bg_cmd.erase(bg_pid[i]);
+        }
+      }
       wait(nullptr);
+    }
 
     // recover the old foreground process
     signal(SIGTTOU, SIG_IGN);
-    tcsetpgrp(STDIN_FILENO, getpgid(getpid()));
+    tcsetpgrp(0, getpgid(getpid()));
     signal(SIGTTOU, SIG_DFL);
   }
 }
