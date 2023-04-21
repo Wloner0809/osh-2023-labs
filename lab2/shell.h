@@ -15,7 +15,7 @@ std::vector<pid_t> bg_pid;
 std::vector<std::string> history_cmd;
 // used in alias cmd
 std::unordered_map<std::string, std::string> alias_cmd;
-// used in bg cmd
+// store bg cmd 
 std::unordered_map<pid_t, std::string> bg_cmd;
 
 // 经典的 cpp string split 实现
@@ -37,8 +37,6 @@ std::vector<std::string> split(std::string s, const std::string &delimiter)
 
 void run_cmd(std::vector<std::string> args)
 {
-  // run command that doesn't have redirection/pipe(i.e. > >> < |)
-
   // std::vector<std::string> 转 char **
   char *arg_ptrs[args.size() + 1];
   for (__SIZE_TYPE__ i = 0; i < args.size(); i++)
@@ -61,6 +59,8 @@ void run_redi_cmd(std::vector<std::string> args)
       int fd = open((*(index + 1)).c_str(), O_WRONLY | O_TRUNC | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
       dup2(fd, 1);
       close(fd);
+      // "%" is regarded as a sign
+      // which can help delete.
       *index = "%";
       *(index + 1) = "%";
     }
@@ -149,6 +149,7 @@ void sighandler(int sig)
   if (sig == SIGINT)
   {
     std::cout << std::endl;
+    // the result of STFW:
     // https://stackoverflow.com/questions/16828378/readline-get-a-new-prompt-on-sigint
     siglongjmp(env, 1);
   }

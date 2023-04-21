@@ -51,12 +51,22 @@ int main()
     // cin.peek()的返回值是一个char型的字符，其返回值是指针指向的当前字符，但它只是观测
     // 指针停留在当前位置并不后移；如果要访问的字符是文件结束符，则函数值是EOF(-1)
     if (std::cin.peek() == EOF)
+    {
+      std::cout << "\nexit" << std::endl;
       exit(0);
+    }
 
     // 读入一行。std::getline 结果不包含换行符。
     std::getline(std::cin, cmd);
 
     history_cmd.push_back(cmd);
+    if (history_cmd.size() > 1)
+    {
+      if (cmd == history_cmd[history_cmd.size() - 2])
+      {
+        history_cmd.pop_back();
+      }
+    }
 
     if (alias_cmd.find(cmd) != alias_cmd.end())
     {
@@ -83,6 +93,13 @@ int main()
         history_cmd.push_back(history_cmd[num - 1]);
         std::cout << history_cmd[num - 1] << std::endl;
         cmd = history_cmd[num - 1];
+        if (history_cmd.size() > 1)
+        {
+          if (cmd == history_cmd[history_cmd.size() - 2])
+          {
+            history_cmd.pop_back();
+          }
+        }
         args = split(cmd, " ");
       }
     }
@@ -135,8 +152,15 @@ int main()
           std::cout << bg_pid[i] << "    "
                     << "finish!"
                     << "                   " << bg_cmd[bg_pid[i]] << std::endl;
+        }
+      }
+      for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
+      {
+        if (waitpid(bg_pid[i], NULL, WNOHANG) != 0)
+        {
           bg_pid.erase(std::find(bg_pid.begin(), bg_pid.end(), bg_pid[i]));
           bg_cmd.erase(bg_pid[i]);
+          i--;
         }
       }
       std::string path;
@@ -155,8 +179,15 @@ int main()
           std::cout << bg_pid[i] << "    "
                     << "finish!"
                     << "                   " << bg_cmd[bg_pid[i]] << std::endl;
+        }
+      }
+      for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
+      {
+        if (waitpid(bg_pid[i], NULL, WNOHANG) != 0)
+        {
           bg_pid.erase(std::find(bg_pid.begin(), bg_pid.end(), bg_pid[i]));
           bg_cmd.erase(bg_pid[i]);
+          i--;
         }
       }
       if (args.size() <= 1)
@@ -170,24 +201,33 @@ int main()
       continue;
     }
 
-    // TO BE DONE
-    // When the process finishes, output its pid and the cmd
-    // first finish first output
     if (args[0] == "wait")
     {
       for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
       {
+        if (waitpid(bg_pid[i], NULL, WNOHANG) != 0)
+        {
+          bg_pid.erase(std::find(bg_pid.begin(), bg_pid.end(), bg_pid[i]));
+          bg_cmd.erase(bg_pid[i]);
+          i--;
+        }
+      }
+
+      for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
+      {
         waitpid(bg_pid[i], NULL, 0);
       }
+      // std::cout << bg_pid.size() << std::endl;
       for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
       {
         std::cout << bg_pid[i] << "    "
                   << "finish!"
                   << "                   " << bg_cmd[bg_pid[i]] << std::endl;
-        ;
-        bg_pid.erase(std::find(bg_pid.begin(), bg_pid.end(), bg_pid[i]));
-        bg_cmd.erase(bg_pid[i]);
+        // bg_pid.erase(std::find(bg_pid.begin(), bg_pid.end(), bg_pid[i]));
+        // bg_cmd.erase(bg_pid[i]);
       }
+      bg_pid.clear();
+      bg_cmd.clear();
       continue;
     }
 
@@ -200,8 +240,15 @@ int main()
           std::cout << bg_pid[i] << "    "
                     << "finish!"
                     << "                   " << bg_cmd[bg_pid[i]] << std::endl;
+        }
+      }
+      for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
+      {
+        if (waitpid(bg_pid[i], NULL, WNOHANG) != 0)
+        {
           bg_pid.erase(std::find(bg_pid.begin(), bg_pid.end(), bg_pid[i]));
           bg_cmd.erase(bg_pid[i]);
+          i--;
         }
       }
       // support echo $SHELL cmd
@@ -216,6 +263,11 @@ int main()
         std::cout << "/root\n";
         continue;
       }
+      else if (args[1] == "$HOME")
+      {
+        std::cout << getenv("HOME") << std::endl;
+        continue;
+      }
     }
 
     // handle history cmd
@@ -228,8 +280,15 @@ int main()
           std::cout << bg_pid[i] << "    "
                     << "finish!"
                     << "                   " << bg_cmd[bg_pid[i]] << std::endl;
+        }
+      }
+      for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
+      {
+        if (waitpid(bg_pid[i], NULL, WNOHANG) != 0)
+        {
           bg_pid.erase(std::find(bg_pid.begin(), bg_pid.end(), bg_pid[i]));
           bg_cmd.erase(bg_pid[i]);
+          i--;
         }
       }
       // convert the string to int
@@ -254,14 +313,21 @@ int main()
           std::cout << bg_pid[i] << "    "
                     << "finish!"
                     << "                   " << bg_cmd[bg_pid[i]] << std::endl;
+        }
+      }
+      for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
+      {
+        if (waitpid(bg_pid[i], NULL, WNOHANG) != 0)
+        {
           bg_pid.erase(std::find(bg_pid.begin(), bg_pid.end(), bg_pid[i]));
           bg_cmd.erase(bg_pid[i]);
+          i--;
         }
       }
       size_t index = cmd.find("=");
-      alias_cmd[cmd.substr(6, index - 7)] = cmd.substr(index + 2);
-      // std::cout << cmd.substr(6, index - 7) << std::endl;
-      // std::cout << cmd.substr(index + 2) << std::endl;
+      alias_cmd[cmd.substr(6, index - 6)] = cmd.substr(index + 2, cmd.size() - index - 3);
+      // std::cout << cmd.substr(6, index - 6) << std::endl;
+      // std::cout << cmd.substr(index + 2, cmd.size() - index - 3) << std::endl;
       continue;
     }
 
@@ -294,6 +360,25 @@ int main()
     // bg_pid is used in wait cmd
     if (is_background_cmd)
     {
+      for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
+      {
+        if (waitpid(bg_pid[i], NULL, WNOHANG) != 0)
+        {
+          std::cout << bg_pid[i] << "    "
+                    << "finish!"
+                    << "                   " << bg_cmd[bg_pid[i]] << std::endl;
+        }
+      }
+      for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
+      {
+        if (waitpid(bg_pid[i], NULL, WNOHANG) != 0)
+        {
+          bg_pid.erase(std::find(bg_pid.begin(), bg_pid.end(), bg_pid[i]));
+          bg_cmd.erase(bg_pid[i]);
+          i--;
+        }
+      }
+
       bg_pid.push_back(pid);
       int index = cmd.find("&");
       std::string single_bg_cmd = cmd.substr(0, index - 1);
@@ -328,6 +413,7 @@ int main()
     }
     else
     {
+      // std::cout << bg_pid.size() << std::endl;
       for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
       {
         if (waitpid(bg_pid[i], NULL, WNOHANG) != 0)
@@ -335,8 +421,15 @@ int main()
           std::cout << bg_pid[i] << "    "
                     << "finish!"
                     << "                   " << bg_cmd[bg_pid[i]] << std::endl;
+        }
+      }
+      for (__SIZE_TYPE__ i = 0; i < bg_pid.size(); i++)
+      {
+        if (waitpid(bg_pid[i], NULL, WNOHANG) != 0)
+        {
           bg_pid.erase(std::find(bg_pid.begin(), bg_pid.end(), bg_pid[i]));
           bg_cmd.erase(bg_pid[i]);
+          i--;
         }
       }
       wait(nullptr);
