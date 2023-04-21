@@ -1,5 +1,15 @@
 # Lab2
 
+## Make and Run
+```C++
+//use make to compile
+make                                                                         
+g++ -c -Wall shell.cpp -o shell.o
+g++ shell.o -o shell
+//use ./shell to run
+./shell   
+```
+
 ## Optional section
 ### `cd`在没有第二个参数时，默认进入家目录(5%)
 ### 支持`CTRL-D`(5%)
@@ -50,7 +60,7 @@
 > This part may be different from bash
 
 * When the `wait` cmd finishes, the output info is in the order of when commands execute. That's to say if I run `sleep 100 &` first and `sleep 5 &` second, the output info is `sleep 100 finish` and `sleep 5 finish`(although sleep 5 may finish first), so the order of output info doesn't depend on when they finish.
-* I output finish info first and output execute cmd info second, which is didferent from bash
+* I output finish info first and output execute cmd info second, which is different from bash
 
 > Something the same as bash
 
