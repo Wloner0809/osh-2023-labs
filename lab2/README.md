@@ -18,6 +18,9 @@ g++ shell.o -o shell
 ### `echo $SHELL`(5%)
   * also support `echo $HOME`
 ### `echo ~root`(5%)
+  * support `echo ~root` correctly
+> ![](pics/echo_~root.png)
+> I modify root path in vlab, `echo ~root` can display right path /ROOT(rather than /root)
 ### 支持`history`(5%)
   * support `history -n`    
   * support `!n`    
@@ -28,6 +31,9 @@ g++ shell.o -o shell
 ### 支持`alias`(5%)
 ![](pics/alias.png)
 
+### 支持`A=1 env`(5%)
+
+
 
 ## Test the function of each part
 >  Actually, this section is used to provide examples about how shell executes in my computer.
@@ -35,12 +41,11 @@ g++ shell.o -o shell
 ### `Part1`
 ![](pics/Part1.png)
 
+> If cd cmd executes correctly, then output current work path.Otherwise output error info.
+
 ### `Part2 and Part3`
 ![](pics/Part2&Part3.png)
 
-> Bash version:
-
-![](pics/bash_Part2&Part3.png)
 
 > Attention: You should input just `one` space before and after "|" "<" ">" ">>"
 

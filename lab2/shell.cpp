@@ -25,6 +25,10 @@
 
 #include <algorithm>
 
+#include <stdlib.h>
+
+#include <pwd.h>
+
 #include "shell.h"
 
 int main()
@@ -190,15 +194,25 @@ int main()
           i--;
         }
       }
+      int ret;
       if (args.size() <= 1)
-        chdir(getenv("HOME"));
+        ret = chdir(getenv("HOME"));
       else
-        chdir(args[1].c_str());
-      std::string path;
-      path.resize(PATH_MAX);
-      getcwd(&path[0], path.size());
-      std::cout << path << std::endl;
-      continue;
+        ret = chdir(args[1].c_str());
+
+      if (ret < 0)
+      {
+        std::cout << "shell: " << "cd: " << args[1] << ": there is no such file or directory" << std::endl;
+        continue;
+      }
+      else
+      {
+        std::string path;
+        path.resize(PATH_MAX);
+        getcwd(&path[0], path.size());
+        std::cout << path << std::endl;
+        continue;
+      }
     }
 
     if (args[0] == "wait")
@@ -260,7 +274,8 @@ int main()
       // support echo ~root cmd
       else if (args[1] == "~root")
       {
-        std::cout << "/root\n";
+        struct passwd *pw = getpwuid(0);
+        std::cout << pw->pw_dir << std::endl;
         continue;
       }
       else if (args[1] == "$HOME")
@@ -331,19 +346,27 @@ int main()
       continue;
     }
 
+    if (args.size() > 1)
+    {
+      if (args[1] == "env")
+      {
+        setenv((args[0].substr(0, args[0].find("="))).c_str(), args[0].substr(args[0].find("=") + 1).c_str(), 0);
+        system("env");
+        continue;
+      }
+    }
+
     // 处理外部命令
     pid_t pid = fork();
 
-    bool sign = true;
-    pid_t pgid = 0;
+    pid_t pgid;
 
     if (pid == 0)
     {
       // 这里只有子进程才会进入
       // std::cout << "child process\n";
 
-      if (sign)
-        pgid = getpid();
+      pgid = getpid();
       setpgid(pid, pgid);
 
       // std::cout << pgid << "\n";
@@ -386,21 +409,17 @@ int main()
       std::cout << pid << "    " << single_bg_cmd << "               will execute in background" << std::endl;
     }
 
-    if (sign)
-      pgid = pid;
+    pgid = pid;
     setpgid(pid, pgid);
 
+    // std::cout << pid <<"\n";
     // std::cout << getpgid(pid) << "\n";
     // std::cout << getpid() << "\n";
     // std::cout << getppid() << "\n";
     // std::cout << getpgid(getppid()) << "\n";
 
-    if (sign)
-    {
-      tcsetpgrp(0, pgid);
-      kill(pid, SIGCONT);
-      sign = false;
-    }
+    tcsetpgrp(0, pgid);
+    kill(pid, SIGCONT);
 
     // std::cout << getpgid(pid) << "\n";
 
