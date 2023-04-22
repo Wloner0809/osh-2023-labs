@@ -15,7 +15,7 @@ std::vector<pid_t> bg_pid;
 std::vector<std::string> history_cmd;
 // used in alias cmd
 std::unordered_map<std::string, std::string> alias_cmd;
-// store bg cmd 
+// store bg cmd
 std::unordered_map<pid_t, std::string> bg_cmd;
 
 // 经典的 cpp string split 实现
@@ -140,7 +140,8 @@ void run_pipe_cmd(std::string cmd)
           read_end = fd[0];
       }
     }
-    wait(NULL);
+    while (wait(nullptr) > 0)
+      ;
   }
 }
 
