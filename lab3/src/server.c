@@ -7,6 +7,8 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #define BIND_IP_ADDR "127.0.0.1"
 #define BIND_PORT 8000
@@ -61,8 +63,8 @@ int parse_request(char *request, ssize_t req_len, char *path, ssize_t *path_len)
         return -1;
 
     memcpy(path, req + s1, (s2 - s1 + 1) * sizeof(char));
-    path[s2 - s1 + 1] = '\0';
-    *path_len = (s2 - s1 + 1);
+    path[s2 - s1] = '\0';
+    *path_len = (s2 - s1);
     return 0;
 }
 
@@ -78,14 +80,16 @@ void handle_clnt(int clnt_sock)
     char *buffer = (char *)malloc(MAX_RECV_LEN * sizeof(char));
     // 构造要返回的数据
     char *response = (char *)malloc(MAX_SEND_LEN * sizeof(char));
+    // 分析文件
+    struct stat buf;
 
     while (1)
     {
-        if (len = read(clnt_sock, buffer, MAX_RECV_LEN) < 0)
+        if ((len = read(clnt_sock, buffer, MAX_RECV_LEN)) < 0)
             sol_error("reading clnt_sock fails!\n");
         buffer[len] = '\0';
         strcat(req_buf, buffer);
-        if (strcmp(buffer + strlen(buffer) - 4, "\r\n\r\n"))
+        if (!strcmp(buffer + strlen(buffer) - 4, "\r\n\r\n"))
             break;
     }
     req_len = strlen(req_buf);
@@ -93,24 +97,26 @@ void handle_clnt(int clnt_sock)
     if (req_len < 5 || strncmp(req_buf, "GET /", 5) != 0)
     {
         // 请求不完整/请求method不是GET
-        sprintf(response, "HTTP/1.0 %s\r\nContent-Length: %zd\r\n\r\n", HTTP_STATUS_500, 0);
+        sprintf(response, "HTTP/1.0 %s\r\nContent-Length: %zd\r\n\r\n", HTTP_STATUS_500, (ssize_t)0);
         ssize_t response_len = strlen(response);
         ssize_t write_len = 0;
         while (response_len > 0)
         {
             // 通过clnt_sock向客户端发送信息
             // 将clnt_sock作为文件描述符写内容
-            if (write_len = write(clnt_sock, response, response_len) < 0)
+            if ((write_len = write(clnt_sock, response, response_len)) < 0)
+            {
                 sol_error("writing clnt_sock fails!\n");
+            }
             response = response + write_len;
             response_len = response_len - write_len;
         }
         // 关闭客户端套接字
         close(clnt_sock);
         // 释放内存
-        free(req_buf);
-        free(buffer);
-        free(response);
+        // free(req_buf);
+        // free(buffer);
+        // free(response);
         return;
     }
 
@@ -121,12 +127,12 @@ void handle_clnt(int clnt_sock)
 
     if (sign == -1)
     {
-        sprintf(response, "HTTP/1.0 %s\r\nContent-Length: %zd\r\n\r\n", HTTP_STATUS_500, 0);
+        sprintf(response, "HTTP/1.0 %s\r\nContent-Length: %zd\r\n\r\n", HTTP_STATUS_500, (ssize_t)0);
         ssize_t response_len = strlen(response);
         ssize_t write_len = 0;
         while (response_len > 0)
         {
-            if (write_len = write(clnt_sock, response, response_len) < 0)
+            if ((write_len = write(clnt_sock, response, response_len)) < 0)
                 sol_error("writing clnt_sock fails!\n");
             response = response + write_len;
             response_len = response_len - write_len;
@@ -134,18 +140,90 @@ void handle_clnt(int clnt_sock)
         // 关闭客户端套接字
         close(clnt_sock);
         // 释放内存
-        free(req_buf);
-        free(buffer);
-        free(response);
-        free(path);
+        // free(req_buf);
+        // free(buffer);
+        // free(response);
+        // free(path);
         return;
     }
-
-    sprintf(response,
-            "HTTP/1.0 %s\r\nContent-Length: %zd\r\n\r\n%s",
-            HTTP_STATUS_200, path_len, path);
-    size_t response_len = strlen(response);
-
+    else
+    {
+        int fd = open(path, O_RDONLY);
+        if (fd < 0)
+        {
+            // 说明文件打开失败
+            // 对应于404 Not Found
+            sprintf(response, "HTTP/1.0 %s\r\nContent-Length: %zd\r\n\r\n", HTTP_STATUS_404, (ssize_t)0);
+            ssize_t response_len = strlen(response);
+            ssize_t write_len = 0;
+            while (response_len > 0)
+            {
+                if ((write_len = write(clnt_sock, response, response_len)) < 0)
+                    sol_error("writing clnt_sock fails!\n");
+                response = response + write_len;
+                response_len = response_len - write_len;
+            }
+            // 关闭客户端套接字
+            close(clnt_sock);
+            // 释放内存
+            // free(req_buf);
+            // free(buffer);
+            // free(response);
+            // free(path);
+            return;
+        }
+        else
+        {
+            if (fstat(fd, &buf) < 0)
+                sol_error("Getting file attributes fails!\n");
+            if (S_ISDIR(buf.st_mode) || !S_ISREG(buf.st_mode))
+            {
+                // 说明是目录
+                // 或者不是标准文件
+                sprintf(response, "HTTP/1.0 %s\r\nContent-Length: %zd\r\n\r\n", HTTP_STATUS_500, (ssize_t)0);
+                ssize_t response_len = strlen(response);
+                ssize_t write_len = 0;
+                while (response_len > 0)
+                {
+                    if ((write_len = write(clnt_sock, response, response_len)) < 0)
+                        sol_error("writing clnt_sock fails!\n");
+                    response = response + write_len;
+                    response_len = response_len - write_len;
+                }
+                // 关闭客户端套接字
+                close(clnt_sock);
+                // 释放内存
+                // free(req_buf);
+                // free(buffer);
+                // free(response);
+                // free(path);
+                return;
+            }
+            // 下面是正常读取的情况
+            sprintf(response, "HTTP/1.0 %s\r\nContent-Length: %zd\r\n\r\n", HTTP_STATUS_200, (ssize_t)buf.st_size);
+            ssize_t response_len = strlen(response);
+            ssize_t write_len = 0;
+            while (response_len > 0)
+            {
+                if ((write_len = write(clnt_sock, response, response_len)) < 0)
+                    sol_error("writing clnt_sock fails!\n");
+                response = response + write_len;
+                response_len = response_len - write_len;
+            }
+            // 读取文件内容
+            if(read(fd, response, MAX_SEND_LEN) < 0)
+                sol_error("Reading file fails!\n");
+            response_len = strlen(response);
+            write_len = 0;
+            while (response_len > 0)
+            {
+                if ((write_len = write(clnt_sock, response, response_len)) < 0)
+                    sol_error("writing clnt_sock fails!\n");
+                response = response + write_len;
+                response_len = response_len - write_len;
+            }
+        }
+    }
     // 关闭客户端套接字
     close(clnt_sock);
     // 释放内存
