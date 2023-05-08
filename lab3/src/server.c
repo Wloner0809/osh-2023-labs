@@ -73,13 +73,26 @@ void handle_clnt(int clnt_sock)
     // 读取客户端发送来的数据，并解析
     // 将clnt_sock作为一个文件描述符，读取最多MAX_RECV_LEN个字符
     char *req_buf = (char *)malloc(MAX_RECV_LEN * sizeof(char));
+    //对malloc的错误处理
+    if(req_buf == NULL)
+        sol_error("malloc fails!\n");
+    //此指针用于后续动态释放内存
+    //防止原指针变化，导致free()出错
+    //后面几个指向malloc分配的内存区域的指针同理
+    char *req_buf_tmp = req_buf;
     req_buf[0] = '\0';
     ssize_t req_len = 0;
     ssize_t len = 0;
     // buffer存储中间过程读的内容
     char *buffer = (char *)malloc(MAX_RECV_LEN * sizeof(char));
+    if(buffer == NULL)
+        sol_error("malloc fails!\n");
+    char *buffer_tmp = buffer;
     // 构造要返回的数据
     char *response = (char *)malloc(MAX_SEND_LEN * sizeof(char));
+    if(response == NULL)
+        sol_error("malloc fails!\n");
+    char *response_tmp = response;
     // 分析文件
     struct stat buf;
 
@@ -114,14 +127,17 @@ void handle_clnt(int clnt_sock)
         // 关闭客户端套接字
         close(clnt_sock);
         // 释放内存
-        // free(req_buf);
-        // free(buffer);
-        // free(response);
+        free(req_buf_tmp);
+        free(buffer_tmp);
+        free(response_tmp);
         return;
     }
 
     // 根据HTTP请求的内容，解析资源路径和Host头
     char *path = (char *)malloc(MAX_PATH_LEN * sizeof(char));
+    if(path == NULL)
+        sol_error("malloc fails!\n");
+    char *path_tmp = path;
     ssize_t path_len;
     int sign = parse_request(req_buf, req_len, path, &path_len);
 
@@ -140,10 +156,10 @@ void handle_clnt(int clnt_sock)
         // 关闭客户端套接字
         close(clnt_sock);
         // 释放内存
-        // free(req_buf);
-        // free(buffer);
-        // free(response);
-        // free(path);
+        free(req_buf_tmp);
+        free(buffer_tmp);
+        free(response_tmp);
+        free(path_tmp);
         return;
     }
     else
@@ -166,10 +182,10 @@ void handle_clnt(int clnt_sock)
             // 关闭客户端套接字
             close(clnt_sock);
             // 释放内存
-            // free(req_buf);
-            // free(buffer);
-            // free(response);
-            // free(path);
+            free(req_buf_tmp);
+            free(buffer_tmp);
+            free(response_tmp);
+            free(path_tmp);
             return;
         }
         else
@@ -193,10 +209,10 @@ void handle_clnt(int clnt_sock)
                 // 关闭客户端套接字
                 close(clnt_sock);
                 // 释放内存
-                // free(req_buf);
-                // free(buffer);
-                // free(response);
-                // free(path);
+                free(req_buf_tmp);
+                free(buffer_tmp);
+                free(response_tmp);
+                free(path_tmp);
                 return;
             }
             // 下面是正常读取的情况
@@ -227,9 +243,10 @@ void handle_clnt(int clnt_sock)
     // 关闭客户端套接字
     close(clnt_sock);
     // 释放内存
-    free(req_buf);
-    free(path);
-    free(response);
+    free(req_buf_tmp);
+    free(path_tmp);
+    free(response_tmp);
+    free(buffer_tmp);
 }
 
 int main()
