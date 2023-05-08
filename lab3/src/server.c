@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <pthread.h>
 
 #define BIND_IP_ADDR "127.0.0.1"
 #define BIND_PORT 8000
@@ -22,6 +23,30 @@
 #define HTTP_STATUS_200 "200 OK"
 #define HTTP_STATUS_404 "404 Not Found"
 #define HTTP_STATUS_500 "500 Internal Server Error"
+
+#define QUEUE_SIZE 40960
+#define THREAD_NUM 100
+
+typedef struct
+{
+    pthread_mutex_t mutex;
+
+    // 三个条件变量
+    pthread_cond_t task_queue_not_full;
+    pthread_cond_t task_queue_not_empty;
+    pthread_cond_t task_queue_empty;
+
+    int *task_queue;
+    int task_queue_front;
+    int task_queue_tail;
+    int task_queue_cur_size; // 当前的队列大小
+
+    int thread_num; // 线程池中开启的线程数
+    pthread_t *threads;
+
+    int shutdown_pool; // 标志线程池的使用状态
+
+} threadpool;
 
 // 错误处理函数
 void sol_error(char *error_msg)
@@ -73,24 +98,24 @@ void handle_clnt(int clnt_sock)
     // 读取客户端发送来的数据，并解析
     // 将clnt_sock作为一个文件描述符，读取最多MAX_RECV_LEN个字符
     char *req_buf = (char *)malloc(MAX_RECV_LEN * sizeof(char));
-    //对malloc的错误处理
-    if(req_buf == NULL)
+    // 对malloc的错误处理
+    if (req_buf == NULL)
         sol_error("malloc fails!\n");
-    //此指针用于后续动态释放内存
-    //防止原指针变化，导致free()出错
-    //后面几个指向malloc分配的内存区域的指针同理
+    // 此指针用于后续动态释放内存
+    // 防止原指针变化，导致free()出错
+    // 后面几个指向malloc分配的内存区域的指针同理
     char *req_buf_tmp = req_buf;
     req_buf[0] = '\0';
     ssize_t req_len = 0;
     ssize_t len = 0;
     // buffer存储中间过程读的内容
     char *buffer = (char *)malloc(MAX_RECV_LEN * sizeof(char));
-    if(buffer == NULL)
+    if (buffer == NULL)
         sol_error("malloc fails!\n");
     char *buffer_tmp = buffer;
     // 构造要返回的数据
     char *response = (char *)malloc(MAX_SEND_LEN * sizeof(char));
-    if(response == NULL)
+    if (response == NULL)
         sol_error("malloc fails!\n");
     char *response_tmp = response;
     // 分析文件
@@ -135,7 +160,7 @@ void handle_clnt(int clnt_sock)
 
     // 根据HTTP请求的内容，解析资源路径和Host头
     char *path = (char *)malloc(MAX_PATH_LEN * sizeof(char));
-    if(path == NULL)
+    if (path == NULL)
         sol_error("malloc fails!\n");
     char *path_tmp = path;
     ssize_t path_len;
@@ -227,7 +252,7 @@ void handle_clnt(int clnt_sock)
                 response_len = response_len - write_len;
             }
             // 读取文件内容
-            if(read(fd, response, MAX_SEND_LEN) < 0)
+            if (read(fd, response, MAX_SEND_LEN) < 0)
                 sol_error("Reading file fails!\n");
             response_len = strlen(response);
             write_len = 0;
@@ -247,6 +272,112 @@ void handle_clnt(int clnt_sock)
     free(path_tmp);
     free(response_tmp);
     free(buffer_tmp);
+}
+
+void *threadpool_func(void *thread_pool)
+{
+    threadpool *pool = (threadpool *)thread_pool;
+    while (1)
+    {
+        pthread_mutex_lock(&(pool->mutex));
+
+        // 如果线程池关闭，退出
+        if (pool->shutdown_pool == 1)
+        {
+            pthread_mutex_unlock(&(pool->mutex));
+            // 显式终止线程
+            pthread_exit(NULL);
+        }
+
+        // 如果队列为空，则等待队列为非空
+        if (pool->task_queue_cur_size == 0)
+            pthread_cond_wait(&(pool->task_queue_not_empty), &(pool->mutex));
+
+        // 下面取出task,相当于出队
+        pool->task_queue_cur_size--;
+        int clnt_sock = pool->task_queue[pool->task_queue_front];
+        pool->task_queue_front = (pool->task_queue_front + 1) % QUEUE_SIZE;
+
+        if (pool->task_queue_cur_size == (QUEUE_SIZE - 1))
+            // 队列由满变为不满
+            // 可以有新的task加入
+            pthread_cond_broadcast(&(pool->task_queue_not_full));
+
+        if (pool->task_queue_cur_size == 0)
+            pthread_cond_signal(&(pool->task_queue_empty));
+
+        pthread_mutex_unlock(&(pool->mutex));
+
+        // 执行task
+        handle_clnt(clnt_sock);
+        return NULL;
+    }
+}
+
+threadpool *threadpool_create(int thread_num, int queue_size)
+{
+    //创建线程池，并初始化
+    threadpool *pool = (threadpool *)malloc(sizeof(threadpool));
+    if (pool == NULL)
+        sol_error("malloc fails!\n");
+
+    // if successful, return value = 0.
+    if (pthread_mutex_init(&(pool->mutex), NULL))
+        sol_error("init mutex fails!\n");
+
+    if (pthread_cond_init(&(pool->task_queue_not_full), NULL))
+        sol_error("init task_queue_not_full fails!\n");
+    if (pthread_cond_init(&(pool->task_queue_not_empty), NULL))
+        sol_error("init task_queue_not_empty fails!\n");
+    if (pthread_cond_init(&(pool->task_queue_empty), NULL))
+        sol_error("init task_queue_empty fails!\n");
+
+    pool->task_queue = (int *)malloc(sizeof(int) * queue_size);
+    if (pool->task_queue == NULL)
+        sol_error("malloc fails!\n");
+    pool->task_queue_front = 0;
+    pool->task_queue_tail = 0;
+    pool->task_queue_cur_size = 0;
+
+    pool->thread_num = thread_num;
+    pool->threads = (pthread_t *)malloc(sizeof(pthread_t) * thread_num);
+    if (pool->threads == NULL)
+        sol_error("malloc fails!\n");
+
+    pool->shutdown_pool = 0;
+
+    for (int i = 0; i < thread_num; i++)
+        pthread_create(&(pool->threads[i]), NULL, threadpool_func, (void *)pool);
+
+    return pool;
+}
+
+void threadpool_add_a_task(int clnt_sock, threadpool *pool)
+{
+    pthread_mutex_lock(&(pool->mutex));
+
+    if (pool->shutdown_pool == 1)
+    {
+        pthread_mutex_unlock(&(pool->mutex));
+        // 显式终止线程
+        pthread_exit(NULL);
+    }
+
+    if (pool->task_queue_cur_size == (QUEUE_SIZE - 1))
+        // 队列满
+        pthread_cond_wait(&(pool->task_queue_not_full), &(pool->mutex));
+
+    //下面加入task，相当于入队
+    pool->task_queue_cur_size++;
+    pool->task_queue[pool->task_queue_tail] = clnt_sock;
+    pool->task_queue_tail = (pool->task_queue_tail + 1) % QUEUE_SIZE;
+
+    if (pool->task_queue_cur_size > 0)
+        // 队列不为空
+        // 唤醒至少1个线程
+        pthread_cond_signal(&(pool->task_queue_not_empty));
+
+    pthread_mutex_unlock(&(pool->mutex));
 }
 
 int main()
@@ -277,12 +408,16 @@ int main()
     struct sockaddr_in clnt_addr;
     socklen_t clnt_addr_size = sizeof(clnt_addr);
 
+    threadpool *pool = threadpool_create(THREAD_NUM, QUEUE_SIZE);
+
     while (1) // 一直循环
     {
         // 当没有客户端连接时，accept()会阻塞程序执行，直到有客户端连接进来
         int clnt_sock = accept(serv_sock, (struct sockaddr *)&clnt_addr, &clnt_addr_size);
+        if(clnt_sock == -1)
+            sol_error("accept fails!\n");
         // 处理客户端的请求
-        handle_clnt(clnt_sock);
+        threadpool_add_a_task(clnt_sock, pool);
     }
 
     // 实际上这里的代码不可到达，可以在while循环中收到SIGINT信号时主动break
