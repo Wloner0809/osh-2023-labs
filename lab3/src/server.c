@@ -18,13 +18,15 @@
 // 路径长度最大为4096
 #define MAX_PATH_LEN 4096
 #define MAX_HOST_LEN 1024
-#define MAX_CONN 20
+#define MAX_CONN 1024
 
 #define HTTP_STATUS_200 "200 OK"
 #define HTTP_STATUS_404 "404 Not Found"
 #define HTTP_STATUS_500 "500 Internal Server Error"
 
+//任务队列的大小
 #define QUEUE_SIZE 40960
+//线程数目
 #define THREAD_NUM 100
 
 typedef struct
@@ -55,23 +57,22 @@ void sol_error(char *error_msg)
     exit(EXIT_FAILURE);
 }
 
-int parse_request(char *request, ssize_t req_len, char *path, ssize_t *path_len)
+int parse_request(char *request, char *path)
 {
     // 返回值为-1时，说明遇到本实验未定义的错误
     // 返回值为0时，说明在该函数中没有遇到错误
     char *req = request;
-    ssize_t s1 = 3;
-    ssize_t s2 = 5;
+    ssize_t index = 5;
     // 访问路径不会跳出当前路径
-    req[s1] = '.';
+    req[3] = '.';
     // 该标志用于判断路径是否会跳出当前路径
     // 遇到"../"则标志自减，遇到"/"标志自增
     int sig_for_path = 0;
-    while ((s2 - s1) <= MAX_PATH_LEN && req[s2] != ' ')
+    while ((index - 3) <= MAX_PATH_LEN && req[index] != ' ')
     {
-        if (req[s2] == '/')
+        if (req[index] == '/')
         {
-            if (req[s2 - 1] == '.' && req[s2 - 2] == '.')
+            if (req[index - 1] == '.' && req[index - 2] == '.')
                 sig_for_path--;
             else
                 sig_for_path++;
@@ -81,15 +82,14 @@ int parse_request(char *request, ssize_t req_len, char *path, ssize_t *path_len)
             // 说明已经跳出当前路径
             return -1;
         }
-        s2++;
+        index++;
     }
-    if ((s2 - s1) > MAX_PATH_LEN)
+    if ((index - 3) > MAX_PATH_LEN)
         // 说明路径超过最大
         return -1;
 
-    memcpy(path, req + s1, (s2 - s1 + 1) * sizeof(char));
-    path[s2 - s1] = '\0';
-    *path_len = (s2 - s1);
+    memcpy(path, req + 3, (index - 2) * sizeof(char));
+    path[index - 3] = '\0';
     return 0;
 }
 
@@ -123,7 +123,7 @@ void handle_clnt(int clnt_sock)
 
     while (1)
     {
-        if ((len = read(clnt_sock, buffer, MAX_RECV_LEN)) < 0)
+        if ((len = read(clnt_sock, buffer, MAX_RECV_LEN - 1)) < 0)
             sol_error("reading clnt_sock fails!\n");
         buffer[len] = '\0';
         strcat(req_buf, buffer);
@@ -163,8 +163,7 @@ void handle_clnt(int clnt_sock)
     if (path == NULL)
         sol_error("malloc fails!\n");
     char *path_tmp = path;
-    ssize_t path_len;
-    int sign = parse_request(req_buf, req_len, path, &path_len);
+    int sign = parse_request(req_buf, path);
 
     if (sign == -1)
     {
@@ -251,18 +250,26 @@ void handle_clnt(int clnt_sock)
                 response = response + write_len;
                 response_len = response_len - write_len;
             }
+
             // 读取文件内容
-            if (read(fd, response, MAX_SEND_LEN) < 0)
-                sol_error("Reading file fails!\n");
-            response_len = strlen(response);
+            // 这里要满足文件大于1MB时也能正确读取
+            char *read_file = (char *)malloc(buf.st_size * sizeof(char));
+            if (read_file == NULL)
+                sol_error("malloc fails!\n");
+            char *read_file_tmp = read_file;
+            if(read(fd, read_file, buf.st_size) < 0)
+                sol_error("read file fails!\n");
+
+            response_len = strlen(read_file);
             write_len = 0;
             while (response_len > 0)
             {
-                if ((write_len = write(clnt_sock, response, response_len)) < 0)
+                if ((write_len = write(clnt_sock, read_file, response_len)) < 0)
                     sol_error("writing clnt_sock fails!\n");
-                response = response + write_len;
+                read_file = read_file + write_len;
                 response_len = response_len - write_len;
             }
+            free(read_file_tmp);
         }
     }
     // 关闭客户端套接字
@@ -290,7 +297,7 @@ void *threadpool_func(void *thread_pool)
         }
 
         // 如果队列为空，则等待队列为非空
-        if (pool->task_queue_cur_size == 0)
+        while (pool->task_queue_cur_size == 0)
             pthread_cond_wait(&(pool->task_queue_not_empty), &(pool->mutex));
 
         // 下面取出task,相当于出队
@@ -303,20 +310,19 @@ void *threadpool_func(void *thread_pool)
             // 可以有新的task加入
             pthread_cond_broadcast(&(pool->task_queue_not_full));
 
-        if (pool->task_queue_cur_size == 0)
-            pthread_cond_signal(&(pool->task_queue_empty));
+        // if (pool->task_queue_cur_size == 0)
+        //     pthread_cond_signal(&(pool->task_queue_empty));
 
         pthread_mutex_unlock(&(pool->mutex));
 
         // 执行task
         handle_clnt(clnt_sock);
-        return NULL;
     }
 }
 
 threadpool *threadpool_create(int thread_num, int queue_size)
 {
-    //创建线程池，并初始化
+    // 创建线程池，并初始化
     threadpool *pool = (threadpool *)malloc(sizeof(threadpool));
     if (pool == NULL)
         sol_error("malloc fails!\n");
@@ -363,19 +369,18 @@ void threadpool_add_a_task(int clnt_sock, threadpool *pool)
         pthread_exit(NULL);
     }
 
-    if (pool->task_queue_cur_size == (QUEUE_SIZE - 1))
+    while (pool->task_queue_cur_size == (QUEUE_SIZE - 1))
         // 队列满
         pthread_cond_wait(&(pool->task_queue_not_full), &(pool->mutex));
 
-    //下面加入task，相当于入队
+    // 下面加入task，相当于入队
     pool->task_queue_cur_size++;
     pool->task_queue[pool->task_queue_tail] = clnt_sock;
     pool->task_queue_tail = (pool->task_queue_tail + 1) % QUEUE_SIZE;
 
     if (pool->task_queue_cur_size > 0)
         // 队列不为空
-        // 唤醒至少1个线程
-        pthread_cond_signal(&(pool->task_queue_not_empty));
+        pthread_cond_broadcast(&(pool->task_queue_not_empty));
 
     pthread_mutex_unlock(&(pool->mutex));
 }
@@ -387,6 +392,9 @@ int main()
     // SOCK_STREAM: 面向连接的数据传输方式
     // IPPROTO_TCP: 使用TCP协议
     int serv_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+    // 创建线程池
+    threadpool *pool = threadpool_create(THREAD_NUM, QUEUE_SIZE);
 
     // 将套接字和指定的IP、端口绑定
     // 用0填充serv_addr（它是一个sockaddr_in结构体）
@@ -408,13 +416,11 @@ int main()
     struct sockaddr_in clnt_addr;
     socklen_t clnt_addr_size = sizeof(clnt_addr);
 
-    threadpool *pool = threadpool_create(THREAD_NUM, QUEUE_SIZE);
-
     while (1) // 一直循环
     {
         // 当没有客户端连接时，accept()会阻塞程序执行，直到有客户端连接进来
         int clnt_sock = accept(serv_sock, (struct sockaddr *)&clnt_addr, &clnt_addr_size);
-        if(clnt_sock == -1)
+        if (clnt_sock == -1)
             sol_error("accept fails!\n");
         // 处理客户端的请求
         threadpool_add_a_task(clnt_sock, pool);
