@@ -13,7 +13,7 @@
 
 * `handle_clnt()`函数
   * 在读`clnt_sock`时判断请求的method是否为GET,不是则写入`500 Internal Server Error`
-  * 如果文件不存在(包括请求如果是路径不存在的情况),则写入`500 Internal Server Error`
+  * 如果文件不存在(包括请求如果是路径不存在的情况),则写入`404 Not Found`
   * 如果请求的是路径且存在,写入`500 Internal Server Error`
 ### 多线程部分
 
