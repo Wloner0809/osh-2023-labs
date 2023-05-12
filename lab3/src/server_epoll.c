@@ -21,7 +21,7 @@
 #define MAX_HOST_LEN 1024
 #define MAX_CONN 1024
 
-#define MAX_EVENTS 100
+#define MAX_EVENTS 200
 
 #define HTTP_STATUS_200 "200 OK"
 #define HTTP_STATUS_404 "404 Not Found"
@@ -69,6 +69,19 @@ int parse_request(char *request, char *path)
 
     memcpy(path, req + 3, (index - 2) * sizeof(char));
     path[index - 3] = '\0';
+
+    // for(int i = 0; i < strlen("HTTP/1.0\r\nHost: 127.0.0.1:8000"); i++)
+    // {
+    //     printf("%c",req[index + i + 1]);
+    // }
+    // printf("\n");
+
+    if (strncmp(req + index + 1, "HTTP/1.0\r\nHost: 127.0.0.1:8000\r\n", strlen("HTTP/1.0\r\nHost: 127.0.0.1:8000\r\n")) != 0 && strncmp(req + index + 1, "HTTP/1.1\r\nHost: 127.0.0.1:8000\r\n", strlen("HTTP/1.1\r\nHost: 127.0.0.1:8000\r\n")) != 0)
+    {
+        // 请求头不完整
+        return -1;
+    }
+
     return 0;
 }
 
@@ -99,6 +112,9 @@ int handle_clnt(int clnt_sock)
     char *response_tmp = response;
     // 分析文件
     struct stat buf;
+    // 标志变量
+    // 用于标志第一次循环
+    int sig_for_while_loop = 0;
 
     while (1)
     {
@@ -106,36 +122,41 @@ int handle_clnt(int clnt_sock)
             sol_error("reading clnt_sock fails!\n");
         buffer[len] = '\0';
         strcat(req_buf, buffer);
+
+        if (sig_for_while_loop == 0)
+        {
+            // 处理POST请求
+            if (strlen(buffer) < 5 || strncmp(buffer, "GET /", 5) != 0)
+            {
+                // 请求method不是GET
+                sprintf(response, "HTTP/1.0 %s\r\nContent-Length: %zd\r\n\r\n", HTTP_STATUS_500, (ssize_t)0);
+                ssize_t response_len = strlen(response);
+                ssize_t write_len = 0;
+                while (response_len > 0)
+                {
+                    // 通过clnt_sock向客户端发送信息
+                    // 将clnt_sock作为文件描述符写内容
+                    if ((write_len = write(clnt_sock, response, response_len)) < 0)
+                    {
+                        sol_error("writing clnt_sock fails!\n");
+                    }
+                    response = response + write_len;
+                    response_len = response_len - write_len;
+                }
+                // 释放内存
+                free(req_buf_tmp);
+                free(buffer_tmp);
+                free(response_tmp);
+                return 0;
+            }
+        }
+
         if (!strcmp(buffer + strlen(buffer) - 4, "\r\n\r\n"))
             break;
+        sig_for_while_loop = 1;
     }
+    sig_for_while_loop = 0;
     req_len = strlen(req_buf);
-
-    if (req_len < 5 || strncmp(req_buf, "GET /", 5) != 0)
-    {
-        // 请求不完整/请求method不是GET
-        sprintf(response, "HTTP/1.0 %s\r\nContent-Length: %zd\r\n\r\n", HTTP_STATUS_500, (ssize_t)0);
-        ssize_t response_len = strlen(response);
-        ssize_t write_len = 0;
-        while (response_len > 0)
-        {
-            // 通过clnt_sock向客户端发送信息
-            // 将clnt_sock作为文件描述符写内容
-            if ((write_len = write(clnt_sock, response, response_len)) < 0)
-            {
-                sol_error("writing clnt_sock fails!\n");
-            }
-            response = response + write_len;
-            response_len = response_len - write_len;
-        }
-        // 关闭客户端套接字
-        // close(clnt_sock);
-        // 释放内存
-        free(req_buf_tmp);
-        free(buffer_tmp);
-        free(response_tmp);
-        return 0;
-    }
 
     // 根据HTTP请求的内容，解析资源路径和Host头
     char *path = (char *)malloc(MAX_PATH_LEN * sizeof(char));
@@ -156,8 +177,6 @@ int handle_clnt(int clnt_sock)
             response = response + write_len;
             response_len = response_len - write_len;
         }
-        // 关闭客户端套接字
-        // close(clnt_sock);
         // 释放内存
         free(req_buf_tmp);
         free(buffer_tmp);
@@ -182,8 +201,6 @@ int handle_clnt(int clnt_sock)
                 response = response + write_len;
                 response_len = response_len - write_len;
             }
-            // 关闭客户端套接字
-            // close(clnt_sock);
             // 释放内存
             free(req_buf_tmp);
             free(buffer_tmp);
@@ -209,8 +226,6 @@ int handle_clnt(int clnt_sock)
                     response = response + write_len;
                     response_len = response_len - write_len;
                 }
-                // 关闭客户端套接字
-                // close(clnt_sock);
                 // 释放内存
                 free(req_buf_tmp);
                 free(buffer_tmp);
@@ -229,28 +244,6 @@ int handle_clnt(int clnt_sock)
                 response = response + write_len;
                 response_len = response_len - write_len;
             }
-
-            // // 读取文件内容
-            // // 这里要满足文件大于1MB时也能正确读取
-            // char *read_file = (char *)malloc(buf.st_size * sizeof(char));
-            // if (read_file == NULL)
-            //     sol_error("malloc fails!\n");
-            // char *read_file_tmp = read_file;
-            // if (read(fd, read_file, buf.st_size) < 0)
-            //     sol_error("read file fails!\n");
-
-            // response_len = strlen(read_file);
-            // write_len = 0;
-            // while (response_len > 0)
-            // {
-            //     if ((write_len = write(clnt_sock, read_file, response_len)) < 0)
-            //         sol_error("writing clnt_sock fails!\n");
-            //     read_file = read_file + write_len;
-            //     response_len = response_len - write_len;
-            // }
-            // free(read_file_tmp);
-            // 关闭客户端套接字
-            // close(clnt_sock);
             // 释放内存
             free(req_buf_tmp);
             free(path_tmp);
@@ -287,8 +280,6 @@ void handle_file(int fd, int clnt_sock)
         response_len = response_len - write_len;
     }
     free(read_file_tmp);
-    // 关闭客户端套接字
-    // close(clnt_sock);
 }
 
 void handle_epoll(int serv_sock)
@@ -366,20 +357,6 @@ int main()
 
     // 使得serv_sock套接字进入监听状态，开始等待客户端发起请求
     listen(serv_sock, MAX_CONN);
-
-    // 接收客户端请求，获得一个可以与客户端通信的新的生成的套接字clnt_sock
-    // struct sockaddr_in clnt_addr;
-    // socklen_t clnt_addr_size = sizeof(clnt_addr);
-
-    // while (1) // 一直循环
-    // {
-    // 当没有客户端连接时，accept()会阻塞程序执行，直到有客户端连接进来
-    // int clnt_sock = accept(serv_sock, (struct sockaddr *)&clnt_addr, &clnt_addr_size);
-    // if (clnt_sock == -1)
-    //     sol_error("accept fails!\n");
-    // // 处理客户端的请求
-    // handle_clnt(clnt_sock);
-    // }
 
     handle_epoll(serv_sock);
 
