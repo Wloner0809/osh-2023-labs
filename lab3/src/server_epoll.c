@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <sys/epoll.h>
 #include <limits.h>
+#include <sys/sendfile.h>
 
 #define BIND_IP_ADDR "127.0.0.1"
 #define BIND_PORT 8000
@@ -21,7 +22,7 @@
 #define MAX_HOST_LEN 1024
 #define MAX_CONN 1024
 
-#define MAX_EVENTS 200
+#define MAX_EVENTS 100
 
 #define HTTP_STATUS_200 "200 OK"
 #define HTTP_STATUS_404 "404 Not Found"
@@ -212,10 +213,9 @@ int handle_clnt(int clnt_sock)
         {
             if (fstat(fd, &buf) < 0)
                 sol_error("Getting file attributes fails!\n");
-            if (S_ISDIR(buf.st_mode) || !S_ISREG(buf.st_mode))
+            if (S_ISDIR(buf.st_mode))
             {
                 // 说明是目录
-                // 或者不是标准文件
                 sprintf(response, "HTTP/1.0 %s\r\nContent-Length: %zd\r\n\r\n", HTTP_STATUS_500, (ssize_t)0);
                 ssize_t response_len = strlen(response);
                 ssize_t write_len = 0;
@@ -261,25 +261,7 @@ void handle_file(int fd, int clnt_sock)
     // printf("%d\n",clnt_sock);
     struct stat buf;
     fstat(fd, &buf);
-    // 读取文件内容
-    // 这里要满足文件大于1MB时也能正确读取
-    char *read_file = (char *)malloc(buf.st_size * sizeof(char));
-    if (read_file == NULL)
-        sol_error("malloc fails!\n");
-    char *read_file_tmp = read_file;
-    if (read(fd, read_file, buf.st_size) < 0)
-        sol_error("read file fails!\n");
-
-    int response_len = strlen(read_file);
-    int write_len = 0;
-    while (response_len > 0)
-    {
-        if ((write_len = write(clnt_sock, read_file, response_len)) < 0)
-            sol_error("writing clnt_sock fails!\n");
-        read_file = read_file + write_len;
-        response_len = response_len - write_len;
-    }
-    free(read_file_tmp);
+    sendfile(clnt_sock, fd, NULL, buf.st_size);
 }
 
 void handle_epoll(int serv_sock)
@@ -341,7 +323,7 @@ int main()
     // SOCK_STREAM: 面向连接的数据传输方式
     // IPPROTO_TCP: 使用TCP协议
     int serv_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-
+    
     // 将套接字和指定的IP、端口绑定
     // 用0填充serv_addr（它是一个sockaddr_in结构体）
     struct sockaddr_in serv_addr;
