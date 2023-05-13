@@ -235,10 +235,9 @@ void handle_clnt(int clnt_sock)
         {
             if (fstat(fd, &buf) < 0)
                 sol_error("Getting file attributes fails!\n");
-            if (S_ISDIR(buf.st_mode) || !S_ISREG(buf.st_mode))
+            if (S_ISDIR(buf.st_mode))
             {
                 // 说明是目录
-                // 或者不是标准文件
                 sprintf(response, "HTTP/1.0 %s\r\nContent-Length: %zd\r\n\r\n", HTTP_STATUS_500, (ssize_t)0);
                 ssize_t response_len = strlen(response);
                 ssize_t write_len = 0;
