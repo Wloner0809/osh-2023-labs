@@ -27,13 +27,14 @@ void sol_error(char *error_msg)
 > 此部分用两个函数处理的
 * `parse_request()`函数
   * 解析出文件的路径,一经检测到跳出当前路径就返回-1,代表要写入`500 Internal Server Error`
-  * 判断请求头是否完整,主要是看是否有HTTP1.0或HTTP1.1以及HOST。这里HTTP1.1请求不写入`500 Internal Server Error`
-
+  * 判断请求头是否完整,主要是看是否有HTTP1.0或HTTP1.1以及HOST。这里HTTP1.1请求不写入`500 Internal Server Error`(问lly TA说这里不是重点，故不写入`500 Internal Server Error`)
 * `handle_clnt()`函数
   * 在读`clnt_sock`时判断请求的method是否为GET,不是则写入`500 Internal Server Error`
     * 这里注意`POST`请求时request中含有文件内容，所有单纯通过"\r\n\r\n"来判断是否读完不正确
   * 如果文件不存在(包括请求如果是目录不存在的情况),则写入`404 Not Found`
   * 如果请求的是目录且存在,写入`500 Internal Server Error`
+
+> 注意如果是`404 Not Found`或者`500 Internal Server Error`，则Content-Length输出是0
 ### 多线程部分
 
 ```C
@@ -71,13 +72,13 @@ typedef struct
 * `ep_event_list[i].events == EPOLLOUT`情况下向clnt_sock写入文件内容，这里选择使用更高效的sendfile()函数进行处理
 
 ### 一些测试
-
+#### 正常情况
 ![](pics/200.png)
-
+#### POST请求
 ![](pics/POST.png)
-
+#### 请求文件不存在
 ![](pics/404.png)
-
+#### 请求的是目录
 ![](pics/500.png)
 
 ## `siege`测试结果
@@ -87,16 +88,15 @@ typedef struct
 ![](pics/origin.png)
 
 ### 有多线程的服务器
-
 ![](pics/thread.png)
-
 ### 有epoll的服务器
-
 ![](pics/epoll.png)
 
 > 可以看到多线程的并发性、吞吐率、响应时间有了显著优化
 
->epoll的吞吐率、响应时间有了显著优化
+> epoll的吞吐率、响应时间有了显著优化
+
+> 符合预期
 
 ## 遇到的问题以及相对应的sol(相当于做实验的记录,助教可以pass这个部分)
 * `path`多出了一个空格导致读文件总是出错
