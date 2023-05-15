@@ -30,7 +30,7 @@ void sol_error(char *error_msg)
   * 判断请求头是否完整,主要是看是否有HTTP1.0或HTTP1.1以及HOST。这里HTTP1.1请求不写入`500 Internal Server Error`(问lly TA说这里不是重点，故不写入`500 Internal Server Error`)
 * `handle_clnt()`函数
   * 在读`clnt_sock`时判断请求的method是否为GET,不是则写入`500 Internal Server Error`
-    * 这里注意`POST`请求时request中含有文件内容，所有单纯通过"\r\n\r\n"来判断是否读完不正确
+    * 这里注意`POST`请求时request中含有文件内容，所以单纯通过"\r\n\r\n"来判断是否读完不正确
   * 如果文件不存在(包括请求如果是目录不存在的情况),则写入`404 Not Found`
   * 如果请求的是目录且存在,写入`500 Internal Server Error`
 
@@ -80,6 +80,9 @@ typedef struct
 ![](pics/404.png)
 #### 请求的是目录
 ![](pics/500.png)
+#### 跳出当前目录
+![](pics/jump%20out.png)
+
 
 ## `siege`测试结果
 
